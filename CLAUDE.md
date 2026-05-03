@@ -1,0 +1,172 @@
+# FlowMint Workflows — AI Reference
+
+**Status:** Planning phase. Phase 0 (this scaffolding + design docs) is complete. Phase 1 (foundation build) has not started yet. See `docs/ROADMAP.md` for the phased build plan.
+
+A WordPress plugin that turns FormEngine submissions into multi-step workflows — Drive uploads, Printavo Quote creation, customer ack emails, conditional branches, etc. — without requiring an external orchestrator like Zapier.
+
+## What this plugin IS
+
+- An async workflow runtime that listens to `fre_submission_complete` (FormEngine's post-submission action)
+- A library of reusable "steps" — pluggable units that do one thing each (find a Drive folder, upload a file, create a Printavo Quote, send an email)
+- A workflow registry where each form_id can be wired to a workflow definition (JSON, stored in DB)
+- A connector REST API + MCP tool layer so workflows can be created and managed by AI tools (Claude) the same way FormEngine forms are
+- A FlowMint-internal admin UI for run history, replay, and debugging
+
+## What this plugin IS NOT
+
+- A visual workflow builder (no drag-and-drop UI for end users)
+- A general-purpose iPaaS (this is a focused tool for FlowMint's client work, not a Zapier replacement for the world)
+- A multi-tenant SaaS (each client has their own WordPress install)
+- Synchronous execution (all workflows run async via Action Scheduler)
+- Coupled to FormEngine's core (FormEngine ships separately and shouldn't know this plugin exists)
+
+## System requirements
+
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| WordPress | 5.0+ | |
+| PHP | 7.4+ | Type hints, arrow functions, null coalescing |
+| MySQL | 5.6+ / MariaDB 10.0+ | InnoDB required (transactional integrity for run history) |
+| Form Runtime Engine | 1.6.0+ | Hard dependency — admin notice if missing |
+| Action Scheduler | bundled | Used for async job processing; bundled in vendor/ |
+
+## Documentation map
+
+The full docs live in `docs/`. Read in roughly this order:
+
+| Topic | File |
+|-------|------|
+| **Build plan, phases, scope** | `docs/ROADMAP.md` |
+| **Technical architecture** | `docs/ARCHITECTURE.md` |
+| **Step library reference** | `docs/STEP_LIBRARY.md` |
+| **Connector REST + MCP API** | `docs/CONNECTOR_API.md` |
+| **FormEngine integration contract** | `docs/INTEGRATION_FRE.md` |
+| **Example workflow patterns** | `docs/REFERENCE_PATTERNS.md` |
+| **Google Drive setup (service account)** | `docs/SETUP_GOOGLE_DRIVE.md` |
+| **Printavo API setup** | `docs/SETUP_PRINTAVO.md` |
+| **Slack notification setup** | `docs/SETUP_SLACK.md` |
+| **Migrating existing Zapier workflows** | `docs/MIGRATION_FROM_ZAPIER.md` |
+| **Detailed patterns, examples, gotchas** | `docs/CLAUDE.md` |
+
+## Quick architectural summary
+
+```
+[ Form Submission ]
+        ↓
+[ FormEngine: validate, sanitize, store entry, attach files ]
+        ↓
+[ fre_submission_complete action fires ]
+        ↓
+[ FlowMint Workflows listener: find workflow for form_id ]
+        ↓
+[ Action Scheduler: enqueue async job ]
+        ↓ (returns immediately — user sees thank-you page)
+        ↓
+[ Async worker picks up job ]
+        ↓
+[ Workflow executor runs each step in sequence ]
+        ↓
+[ Step 1: find_or_create_customer (Printavo) ]
+[ Step 2: find_or_create_folder (Drive) ]
+[ Step 3: upload_file (Drive) ]
+[ Step 4: create_quote (Printavo) ]
+[ Step 5: send_email (customer ack) ]
+[ Step 6: delete_entry (FormEngine cleanup) ]
+        ↓
+[ Run history: success ]
+```
+
+If any step fails, Action Scheduler retries with exponential backoff. After max retries, the run is marked failed and a notification fires to FlowMint (Slack/email). Failed runs are visible in the admin UI and can be manually replayed.
+
+## Plugin file structure
+
+```
+flowmint-workflows/
+  flowmint-workflows.php       # Main plugin file (currently a stub)
+  CLAUDE.md                    # This file — AI-facing reference
+  README.md                    # Public-facing readme
+  CHANGELOG.md                 # Version history
+  docs/                        # All design/reference docs
+  includes/
+    Core/                      # Workflow engine, executor, context, registry
+    Steps/                     # Step library — one class per step type
+    Connectors/                # External service clients (Drive, Printavo, etc.)
+    Database/                  # DB schema, migrations, repositories
+    Mcp/                       # MCP tool surface
+    Admin/                     # Admin UI (run history, settings)
+  assets/                      # CSS/JS for admin UI
+  languages/                   # i18n
+  tests/
+    Unit/                      # Step-level unit tests
+    Integration/               # End-to-end workflow tests
+  bin/
+    build-release.sh           # Production zip builder (mirrors FRE pattern)
+  composer.json
+  phpunit.xml
+  uninstall.php                # Cleanup on plugin deletion
+```
+
+Phase 1 of the build creates everything under `includes/` and `assets/`. Phases 2-5 add specific step categories and polish.
+
+## Companion to FormEngine, not a fork
+
+FlowMint Workflows DEPENDS ON Form Runtime Engine but lives as a separate plugin in a separate repo. Reasoning:
+
+- **Single Responsibility:** FormEngine is a generic form runtime. It shouldn't know about Printavo or Drive. Coupling business-logic orchestration into FRE would pollute its core.
+- **Distribution flexibility:** FormEngine may eventually be sold/distributed separately. The orchestration layer is FlowMint IP.
+- **Update independence:** Workflow plugin iterates frequently; FormEngine should stay stable.
+- **Clean integration contract:** The two plugins interoperate via documented WordPress hooks and class-level APIs (see `docs/INTEGRATION_FRE.md`).
+
+## Naming conventions
+
+- **Class prefix:** `FMW_*` (FlowMint Workflows)
+- **Plugin slug / text domain:** `flowmint-workflows`
+- **REST namespace:** `flowmint/v1/connector/`
+- **Action prefix:** `fmw_*` (e.g., `fmw_workflow_run_started`, `fmw_workflow_run_completed`)
+- **Filter prefix:** `fmw_*`
+- **DB table prefix:** `{wp_prefix}fmw_*` (e.g., `wp_fmw_workflows`, `wp_fmw_workflow_runs`)
+- **Option prefix:** `fmw_*`
+- **MCP tool prefix:** `workflow_*` (matches the resource name, parallels `formengine_*` in FRE)
+
+## Phased build status
+
+| Phase | Description | Hours est | Status |
+|---|---|---|---|
+| 0 | Planning + scaffolding + design docs | 3 | **In progress** |
+| 1 | Foundation (engine, DB, base steps, connector, MCP) | 14 | Not started |
+| 2 | Drive + Email integrations | 10 | Not started |
+| 3 | Printavo + HTTP integrations | 8 | Not started |
+| 4 | 725 Print Lab migration | 6 | Not started |
+| 5 | Production polish | 12 | Not started |
+
+See `docs/ROADMAP.md` for detail on each phase.
+
+## Key architectural decisions (locked)
+
+These are documented in detail in `docs/ARCHITECTURE.md`. Quick summary:
+
+1. **Async-only execution.** All workflows run via Action Scheduler. No synchronous mode in v1.
+2. **Workflow definitions stored as JSON in DB.** Same model as FormEngine forms — created via MCP, edited via REST API, no GUI editor in v1.
+3. **Per-client WordPress install.** No multi-tenancy. Each client gets their own plugin instance.
+4. **MCP-first interface.** No client-facing admin UI. Only FlowMint-internal admin UI for debugging.
+5. **Step library is code, workflow definitions are data.** New step types require code (a new Step class). New workflows just need a JSON definition.
+6. **Tight integration with FormEngine via hooks + classes.** FlowMint Workflows is useless without FRE active.
+7. **Companion plugin, not a fork.** Separate plugin folder, separate repo, separate version.
+8. **Service-business focus, not industry-specific.** Universal primitives (Drive, Email, HTTP, conditionals) plus opinionated connectors (Printavo) added as clients require.
+9. **Action Scheduler over wp_cron.** Industry-standard for async job processing in WordPress in 2026.
+10. **No client-facing visual workflow builder.** FlowMint operates the plugin; clients only see the form.
+
+## Critical guardrails for AI sessions working on this plugin
+
+- **Plugin is in PLANNING PHASE.** Do not write Phase 1+ code without explicit confirmation from Breon. The docs in `docs/` are the contract; Phase 1 build implements them.
+- **Do not modify FormEngine to integrate with this plugin.** FormEngine should not know FlowMint Workflows exists. Use only documented FRE hooks (`fre_submission_complete`, `fre_entry_created`, etc.) and public classes (`FRE_Entry`).
+- **Workflow JSON is the source of truth, not PHP files.** Workflow definitions live in the DB, created via the connector REST API or MCP tools. PHP "workflow definitions" only exist in tests and reference examples.
+- **Steps must be deterministic for a given context.** A step's execution should depend only on its config and the current run context. No global state, no static caches that survive across runs.
+- **Async execution is mandatory.** Never block the form submission to wait for workflow completion. Action Scheduler is the only execution path in v1.
+- **Failed steps must not corrupt state.** A step that fails mid-execution must leave external services in a consistent state OR mark the run as needing manual intervention. Idempotency keys + transactional patterns are required for state-changing steps.
+- **No client-specific code in the plugin.** All client-specific configuration (Drive folder IDs, Printavo user IDs, email templates) lives in the workflow JSON, never in the plugin codebase.
+- **Test coverage is required for v1 ship.** Each step type ships with unit tests. Each integration ships with at least one end-to-end test. Coverage target: >80%.
+
+---
+
+**Plugin status:** scaffolding complete, design docs in progress, no runtime code yet. See `docs/ROADMAP.md` for what comes next.

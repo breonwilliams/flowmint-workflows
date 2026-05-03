@@ -1,0 +1,28 @@
+# Development/Testing artifacts
+vendor/
+build/
+node_modules/
+.phpunit.result.cache
+composer
+composer-setup.php
+composer.lock
+
+# IDE/Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local release builds
+release/
+
+# Claude workspace metadata
+.claude/
+
+# Logs
+*.log

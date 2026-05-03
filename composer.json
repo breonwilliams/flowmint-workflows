@@ -1,0 +1,44 @@
+{
+    "name": "flowmint/flowmint-workflows",
+    "description": "Async workflow runtime for WordPress. Companion plugin to Form Runtime Engine.",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "php": ">=7.4",
+        "google/apiclient": "^2.12.0",
+        "woocommerce/action-scheduler": "^3.7"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.6",
+        "brain/monkey": "^2.6",
+        "yoast/phpunit-polyfills": "^2.0"
+    },
+    "autoload": {
+        "classmap": ["includes/"]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "FMW\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true,
+        "platform-check": false,
+        "allow-plugins": {
+            "composer/installers": true
+        }
+    },
+    "scripts": {
+        "post-update-cmd": "Google\\Task\\Composer::cleanup",
+        "post-install-cmd": "Google\\Task\\Composer::cleanup",
+        "test": "phpunit",
+        "test:unit": "phpunit --testsuite Unit",
+        "test:integration": "phpunit --testsuite Integration"
+    },
+    "extra": {
+        "google/apiclient-services": [
+            "Drive"
+        ]
+    }
+}
