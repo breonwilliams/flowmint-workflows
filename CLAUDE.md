@@ -1,6 +1,6 @@
 # FlowMint Workflows — AI Reference
 
-**Status:** Planning phase. Phase 0 (this scaffolding + design docs) is complete. Phase 1 (foundation build) has not started yet. See `docs/ROADMAP.md` for the phased build plan.
+**Status (as of 2026-05-04, version 0.4.0-rc7):** Phases 0–3 fully complete. Phase 4 (first production migration — 725 Print Lab) deployed to production with workflow runs executing successfully end-to-end across 6 step types; remaining infrastructure unblocks (client-side Drive Shared Drive setup, transactional email transport, Printavo API account-active state) tracked in `_FlowMint-Workflows-Migration/handoff/next-session-primer.md` in the 725 client folder. **READ `docs/TROUBLESHOOTING.md` BEFORE adding a new connector or onboarding a new client** — it captures every gotcha the first deployment surfaced (Printavo schema migration, GraphQL variables encoding, GoDaddy SMTP block, Drive service-account quota, etc.).
 
 A WordPress plugin that turns FormEngine submissions into multi-step workflows — Drive uploads, Printavo Quote creation, customer ack emails, conditional branches, etc. — without requiring an external orchestrator like Zapier.
 
@@ -47,6 +47,7 @@ The full docs live in `docs/`. Read in roughly this order:
 | **Slack notification setup** | `docs/SETUP_SLACK.md` |
 | **Migrating existing Zapier workflows** | `docs/MIGRATION_FROM_ZAPIER.md` |
 | **Detailed patterns, examples, gotchas** | `docs/CLAUDE.md` |
+| **🔧 First-deployment lessons + gotchas (READ FIRST)** | `docs/TROUBLESHOOTING.md` |
 
 ## Quick architectural summary
 

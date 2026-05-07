@@ -39,12 +39,16 @@ class FMW_Step_Printavo_Find_Or_Create_Customer extends FMW_Step_Base {
         return [
             'type'       => 'object',
             'properties' => [
-                'id'           => [ 'type' => 'string' ],
+                'contact_id'   => [ 'type' => 'string', 'description' => 'Printavo Contact ID — pass to printavo_create_quote.contact_id' ],
+                'customer_id'  => [ 'type' => 'string', 'description' => 'Printavo Customer ID (the company)' ],
                 'email'        => [ 'type' => 'string' ],
                 'first_name'   => [ 'type' => 'string' ],
                 'last_name'    => [ 'type' => 'string' ],
+                'full_name'    => [ 'type' => 'string' ],
+                'phone'        => [ 'type' => 'string' ],
                 'company_name' => [ 'type' => 'string' ],
                 'was_created'  => [ 'type' => 'boolean' ],
+                'id'           => [ 'type' => 'string', 'description' => 'Legacy alias for contact_id; prefer contact_id in new workflows' ],
             ],
         ];
     }
@@ -55,26 +59,22 @@ class FMW_Step_Printavo_Find_Or_Create_Customer extends FMW_Step_Base {
             throw new FMW_Step_Exception( 'config_error', 'printavo_find_or_create_customer: email is required.' );
         }
 
-        // Auto-split full name if first/last not provided.
-        $args = $this->config;
-        if ( empty( $args['first_name'] ) && empty( $args['last_name'] ) && ! empty( $args['name'] ) ) {
-            $name  = trim( $args['name'] );
-            $parts = preg_split( '/\s+/', $name, 2 );
-            $args['first_name'] = $parts[0] ?? $name;
-            $args['last_name']  = $parts[1] ?? '';
-        }
-
+        // The client's build_contact_input handles name-splitting internally;
+        // we just forward the args through without preprocessing.
         $client = FMW_Printavo_Client::from_credentials();
-        $result = $client->find_or_create_customer( $args );
+        $result = $client->find_or_create_customer( $this->config );
 
         return [
-            'id'           => $result['id'] ?? '',
+            'contact_id'   => $result['contact_id'] ?? '',
+            'customer_id'  => $result['customer_id'] ?? '',
             'email'        => $result['email'] ?? '',
-            'first_name'   => $result['firstName'] ?? '',
-            'last_name'    => $result['lastName'] ?? '',
+            'first_name'   => $result['first_name'] ?? '',
+            'last_name'    => $result['last_name'] ?? '',
+            'full_name'    => $result['full_name'] ?? '',
             'phone'        => $result['phone'] ?? '',
-            'company_name' => $result['companyName'] ?? '',
+            'company_name' => $result['company_name'] ?? '',
             'was_created'  => ! empty( $result['was_created'] ),
+            'id'           => $result['id'] ?? '',
         ];
     }
 }

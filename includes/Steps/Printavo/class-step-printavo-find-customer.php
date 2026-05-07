@@ -34,11 +34,15 @@ class FMW_Step_Printavo_Find_Customer extends FMW_Step_Base {
             'type'       => 'object',
             'properties' => [
                 'found'        => [ 'type' => 'boolean' ],
-                'id'           => [ 'type' => 'string' ],
+                'contact_id'   => [ 'type' => 'string' ],
+                'customer_id'  => [ 'type' => 'string' ],
                 'email'        => [ 'type' => 'string' ],
                 'first_name'   => [ 'type' => 'string' ],
                 'last_name'    => [ 'type' => 'string' ],
+                'full_name'    => [ 'type' => 'string' ],
+                'phone'        => [ 'type' => 'string' ],
                 'company_name' => [ 'type' => 'string' ],
+                'id'           => [ 'type' => 'string', 'description' => 'Legacy alias for contact_id' ],
             ],
         ];
     }
@@ -58,12 +62,15 @@ class FMW_Step_Printavo_Find_Customer extends FMW_Step_Base {
 
         return [
             'found'        => true,
-            'id'           => $customer['id'] ?? '',
+            'contact_id'   => $customer['contact_id'] ?? '',
+            'customer_id'  => $customer['customer_id'] ?? '',
             'email'        => $customer['email'] ?? '',
-            'first_name'   => $customer['firstName'] ?? '',
-            'last_name'    => $customer['lastName'] ?? '',
+            'first_name'   => $customer['first_name'] ?? '',
+            'last_name'    => $customer['last_name'] ?? '',
+            'full_name'    => $customer['full_name'] ?? '',
             'phone'        => $customer['phone'] ?? '',
-            'company_name' => $customer['companyName'] ?? '',
+            'company_name' => $customer['company_name'] ?? '',
+            'id'           => $customer['id'] ?? '',
         ];
     }
 }

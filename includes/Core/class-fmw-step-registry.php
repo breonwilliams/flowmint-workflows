@@ -103,6 +103,7 @@ class FMW_Step_Registry {
             'FMW_Step_Drive_Find_Or_Create_Folder',
             'FMW_Step_Drive_Create_Folder',
             'FMW_Step_Drive_Upload_File',
+            'FMW_Step_Drive_Create_Text_File',
             'FMW_Step_Drive_Share_Link',
         ];
 

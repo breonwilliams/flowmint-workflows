@@ -240,6 +240,58 @@ class FMW_Drive_Client {
     }
 
     /**
+     * Create a Drive file from an in-memory string.
+     *
+     * Use this for small generated documents — submission records, log
+     * snapshots, formatted summaries — where the content originates in PHP
+     * rather than from a local file on disk. Uses Drive's multipart upload
+     * with a hard size cap of 1MB to prevent accidental misuse on large
+     * blobs (which should go through upload_file's chunked path instead).
+     *
+     * @param string $parent_id
+     * @param string $name      Drive filename including extension (e.g. "submission.txt")
+     * @param string $content   File body as a UTF-8 string
+     * @param string $mime_type Defaults to text/plain; pass "text/markdown" for .md, "text/html" for .html, etc.
+     * @return array { id, name, web_view_link, size, mime_type }
+     * @throws FMW_Step_Exception
+     */
+    public function create_text_file( $parent_id, $name, $content, $mime_type = 'text/plain' ) {
+        $size = strlen( (string) $content );
+        $cap  = 1024 * 1024; // 1MB
+        if ( $size > $cap ) {
+            throw new FMW_Step_Exception(
+                'invalid_input',
+                sprintf( 'Drive create_text_file: content exceeds %d-byte cap (got %d). Use upload_file with a local path for larger payloads.', $cap, $size )
+            );
+        }
+
+        $metadata = new \Google\Service\Drive\DriveFile( [
+            'name'    => $name,
+            'parents' => [ $parent_id ],
+        ] );
+
+        try {
+            $created = $this->service->files->create( $metadata, [
+                'data'              => (string) $content,
+                'mimeType'          => $mime_type,
+                'uploadType'        => 'multipart',
+                'fields'            => 'id, name, webViewLink, size, mimeType',
+                'supportsAllDrives' => true,
+            ] );
+        } catch ( \Exception $e ) {
+            $this->translate_exception( $e, 'create_text_file' );
+        }
+
+        return [
+            'id'            => $created->getId(),
+            'name'          => $created->getName(),
+            'web_view_link' => $created->getWebViewLink(),
+            'size'          => (int) $created->getSize(),
+            'mime_type'     => $created->getMimeType(),
+        ];
+    }
+
+    /**
      * Resumable chunked upload for large files.
      *
      * @param \Google\Service\Drive\DriveFile $metadata

@@ -167,24 +167,31 @@ class FMW_Printavo_Client {
     }
 
     /**
-     * Find a customer by email.
+     * Find a customer (Customer + primary Contact) by email.
+     *
+     * Printavo's data model splits Customer (the company) from Contact (the
+     * person). Quotes attach to a Contact, and the Contact links back to a
+     * Customer. We search Contacts by email and traverse to Customer to
+     * surface companyName for the workflow.
      *
      * @param string $email
-     * @return array|null Customer data, or null if not found.
+     * @return array|null { contact_id, customer_id, company_name, email, first_name, last_name, phone, full_name } or null
      */
     public function find_customer_by_email( $email ) {
-        // Note: Printavo's GraphQL schema may evolve. This query targets
-        // common fields. Adjust if Printavo changes the schema.
         $query = <<<'GQL'
-query FindCustomerByEmail($email: String!) {
+query FindContactByEmail($email: String!) {
   contacts(query: $email, first: 5) {
     nodes {
       id
       email
       firstName
       lastName
+      fullName
       phone
-      companyName
+      customer {
+        id
+        companyName
+      }
     }
   }
 }
@@ -195,7 +202,7 @@ GQL;
         $nodes = $data['contacts']['nodes'] ?? [];
         foreach ( $nodes as $contact ) {
             if ( strcasecmp( (string) ( $contact['email'] ?? '' ), $email ) === 0 ) {
-                return $contact;
+                return self::shape_customer_result( $contact );
             }
         }
 
@@ -203,58 +210,75 @@ GQL;
     }
 
     /**
-     * Create a customer.
+     * Create a Customer with an inline primary Contact.
+     *
+     * Maps onto Printavo's `customerCreate(input: CustomerCreateInput!)`
+     * mutation. CustomerCreateInput requires a `primaryContact: ContactInput`
+     * — so a single call creates the Customer (the company) AND its first
+     * Contact (the person). This matches the form-submission shape: one
+     * customer wanting to do business with us, one human contacting us.
      *
      * @param array $args { email, first_name, last_name, phone, company_name }
-     * @return array
+     * @return array Same shape as find_customer_by_email + 'was_created' = true
      */
     public function create_customer( array $args ) {
+        $primary_contact = self::build_contact_input( $args );
+
+        $input = [
+            'primaryContact' => $primary_contact,
+        ];
+        if ( ! empty( $args['company_name'] ) ) {
+            $input['companyName'] = (string) $args['company_name'];
+        }
+
         $query = <<<'GQL'
-mutation CreateContact($input: ContactCreateInput!) {
-  contactCreate(input: $input) {
-    contact {
+mutation CreateCustomer($input: CustomerCreateInput!) {
+  customerCreate(input: $input) {
+    id
+    companyName
+    primaryContact {
       id
       email
       firstName
       lastName
+      fullName
       phone
-      companyName
-    }
-    errors {
-      field
-      message
     }
   }
 }
 GQL;
 
-        $input = [
-            'email' => $args['email'] ?? '',
-        ];
-        if ( ! empty( $args['first_name'] ) )   $input['firstName']   = $args['first_name'];
-        if ( ! empty( $args['last_name'] ) )    $input['lastName']    = $args['last_name'];
-        if ( ! empty( $args['phone'] ) )        $input['phone']       = $args['phone'];
-        if ( ! empty( $args['company_name'] ) ) $input['companyName'] = $args['company_name'];
-
         $data = $this->query( $query, [ 'input' => $input ] );
+        $customer = $data['customerCreate'] ?? [];
 
-        $result = $data['contactCreate'] ?? [];
-        if ( ! empty( $result['errors'] ) ) {
-            $messages = array_map( function( $e ) { return ( $e['field'] ?? '' ) . ': ' . ( $e['message'] ?? '' ); }, $result['errors'] );
+        if ( empty( $customer['id'] ) ) {
             throw new FMW_Step_Exception(
                 'external_4xx',
-                'Printavo customer create errors: ' . implode( '; ', $messages )
+                'Printavo customerCreate did not return a Customer id.'
             );
         }
 
-        return $result['contact'] ?? [];
+        // Build a unified shape from the Customer + nested primaryContact.
+        $contact = $customer['primaryContact'] ?? [];
+        return self::shape_customer_result( [
+            'id'         => $contact['id'] ?? '',
+            'email'      => $contact['email'] ?? '',
+            'firstName'  => $contact['firstName'] ?? '',
+            'lastName'   => $contact['lastName'] ?? '',
+            'fullName'   => $contact['fullName'] ?? '',
+            'phone'      => $contact['phone'] ?? '',
+            'customer'   => [
+                'id'          => $customer['id'],
+                'companyName' => $customer['companyName'] ?? '',
+            ],
+        ] );
     }
 
     /**
      * Find or create a customer by email.
      *
      * @param array $args
-     * @return array { ...customer fields, was_created }
+     * @return array { ...shape_customer_result fields, was_created }
      */
     public function find_or_create_customer( array $args ) {
         $email = $args['email'] ?? '';
@@ -274,58 +298,153 @@ GQL;
     }
 
     /**
-     * Create a Quote (Invoice in Printavo's GraphQL schema).
+     * Create a Quote.
      *
-     * @param array $args { customer_id, user_id, invoice_status_id, nickname, description, ... }
-     * @return array { id, visual_id, url, created_at }
+     * Maps onto Printavo's `quoteCreate(input: QuoteCreateInput!)` mutation.
+     * NOTE: the schema's required fields are `contact: IDInput!`,
+     * `customerDueAt: ISO8601Date!`, `dueAt: ISO8601DateTime!`. The Quote
+     * attaches to a Contact (a person), not a Customer (a company) —
+     * Printavo derives the Customer from the Contact's relationship.
+     *
+     * @param array $args {
+     *     contact_id:        ID of the Contact to attach the Quote to (REQUIRED).
+     *     customer_due_date: ISO8601 date (YYYY-MM-DD). Defaults to +14 days
+     *                        if omitted so the required field is always satisfied.
+     *     due_at:            ISO8601 datetime. Defaults to +30 days at 17:00 UTC.
+     *     nickname:          Quote nickname (visible in Printavo UI).
+     *     description:       Long-form text, stored as customerNote on the Quote.
+     *     production_note:   Internal-only note, stored as productionNote.
+     *     user_id:           Printavo User ID (sales rep / owner).
+     * }
+     * @return array { id, visual_id, nickname, description, url, public_url, customer_due_at, due_at }
      */
     public function create_quote( array $args ) {
+        if ( empty( $args['contact_id'] ) ) {
+            throw new FMW_Step_Exception(
+                'invalid_input',
+                'Printavo create_quote: contact_id is required (use printavo_find_or_create_customer to get one).'
+            );
+        }
+
+        $input = [
+            'contact' => [ 'id' => (string) $args['contact_id'] ],
+        ];
+
+        // Defaults for the two required date fields. Both are mandatory per
+        // the schema, so we always provide them — falling back to sensible
+        // defaults rather than letting the API 400 the request.
+        $input['customerDueAt'] = ! empty( $args['customer_due_date'] )
+            ? (string) $args['customer_due_date']
+            : gmdate( 'Y-m-d', strtotime( '+14 days' ) );
+
+        $input['dueAt'] = ! empty( $args['due_at'] )
+            ? (string) $args['due_at']
+            : gmdate( 'Y-m-d\TH:i:s\Z', strtotime( '+30 days 17:00 UTC' ) );
+
+        if ( ! empty( $args['nickname'] ) )        $input['nickname']        = (string) $args['nickname'];
+        if ( ! empty( $args['description'] ) )     $input['customerNote']    = (string) $args['description'];
+        if ( ! empty( $args['production_note'] ) ) $input['productionNote']  = (string) $args['production_note'];
+        if ( ! empty( $args['user_id'] ) )         $input['owner']           = [ 'id' => (string) $args['user_id'] ];
+
         $query = <<<'GQL'
-mutation CreateInvoice($input: InvoiceCreateInput!) {
-  invoiceCreate(input: $input) {
-    invoice {
-      id
-      visualId
-      customerNote
-      productionNote
-      total
-      createdAt
-    }
-    errors {
-      field
-      message
-    }
+mutation CreateQuote($input: QuoteCreateInput!) {
+  quoteCreate(input: $input) {
+    id
+    visualId
+    nickname
+    customerNote
+    productionNote
+    customerDueAt
+    dueAt
+    url
+    publicUrl
   }
 }
 GQL;
 
-        $input = [];
-        if ( ! empty( $args['customer_id'] ) )       $input['contactId']       = $args['customer_id'];
-        if ( ! empty( $args['user_id'] ) )           $input['ownerId']         = (string) $args['user_id'];
-        if ( ! empty( $args['invoice_status_id'] ) ) $input['statusId']        = (string) $args['invoice_status_id'];
-        if ( ! empty( $args['nickname'] ) )          $input['nickname']        = $args['nickname'];
-        if ( ! empty( $args['description'] ) )       $input['customerNote']    = $args['description'];
-        if ( ! empty( $args['production_note'] ) )   $input['productionNote']  = $args['production_note'];
-        if ( ! empty( $args['customer_due_date'] ) ) $input['customerDueAt']   = $args['customer_due_date'];
-
         $data = $this->query( $query, [ 'input' => $input ] );
+        $quote = $data['quoteCreate'] ?? [];
 
-        $result = $data['invoiceCreate'] ?? [];
-        if ( ! empty( $result['errors'] ) ) {
-            $messages = array_map( function( $e ) { return ( $e['field'] ?? '' ) . ': ' . ( $e['message'] ?? '' ); }, $result['errors'] );
+        if ( empty( $quote['id'] ) ) {
             throw new FMW_Step_Exception(
                 'external_4xx',
-                'Printavo Quote create errors: ' . implode( '; ', $messages )
+                'Printavo quoteCreate did not return a Quote id.'
             );
         }
 
-        $invoice = $result['invoice'] ?? [];
         return [
-            'id'         => $invoice['id'] ?? '',
-            'visual_id'  => $invoice['visualId'] ?? '',
-            'nickname'   => $invoice['nickname'] ?? ( $args['nickname'] ?? '' ),
-            'created_at' => $invoice['createdAt'] ?? '',
-            'url'        => isset( $invoice['visualId'] ) ? "https://www.printavo.com/invoices/{$invoice['visualId']}" : '',
+            'id'              => $quote['id'] ?? '',
+            'visual_id'       => $quote['visualId'] ?? '',
+            'nickname'        => $quote['nickname'] ?? ( $args['nickname'] ?? '' ),
+            'description'     => $quote['customerNote'] ?? '',
+            'url'             => $quote['url'] ?? '',
+            'public_url'      => $quote['publicUrl'] ?? '',
+            'customer_due_at' => $quote['customerDueAt'] ?? '',
+            'due_at'          => $quote['dueAt'] ?? '',
+        ];
+    }
+
+    /**
+     * Build a `ContactInput` map from generic args. Splits a `name` arg into
+     * `first_name` / `last_name` if those weren't supplied explicitly.
+     *
+     * @param array $args
+     * @return array
+     */
+    private static function build_contact_input( array $args ) {
+        $first = (string) ( $args['first_name'] ?? '' );
+        $last  = (string) ( $args['last_name']  ?? '' );
+
+        if ( $first === '' && $last === '' && ! empty( $args['name'] ) ) {
+            list( $first, $last ) = self::split_name( (string) $args['name'] );
+        }
+
+        $contact = [];
+        if ( ! empty( $args['email'] ) ) $contact['email']     = (string) $args['email'];
+        if ( $first !== '' )             $contact['firstName'] = $first;
+        if ( $last !== '' )              $contact['lastName']  = $last;
+        if ( ! empty( $args['phone'] ) ) $contact['phone']     = (string) $args['phone'];
+
+        return $contact;
+    }
+
+    /**
+     * Split a "First Last" string into [ first, last ]. Single-token names
+     * become [ name, '' ]. Multi-token splits at the first whitespace.
+     *
+     * @param string $full
+     * @return array{0:string,1:string}
+     */
+    private static function split_name( $full ) {
+        $full = trim( (string) $full );
+        if ( $full === '' ) return [ '', '' ];
+        $parts = preg_split( '/\s+/', $full, 2 );
+        return [ $parts[0], $parts[1] ?? '' ];
+    }
+
+    /**
+     * Build the unified customer result shape from a Contact-with-customer node.
+     *
+     * @param array $contact { id, email, firstName, lastName, fullName, phone, customer: { id, companyName } }
+     * @return array
+     */
+    private static function shape_customer_result( array $contact ) {
+        $customer = $contact['customer'] ?? [];
+        return [
+            // Both IDs surfaced explicitly: callers (steps, workflows) can use
+            // contact_id when creating a Quote, customer_id when needing to
+            // reference the company entity directly.
+            'contact_id'   => (string) ( $contact['id'] ?? '' ),
+            'customer_id'  => (string) ( $customer['id'] ?? '' ),
+            'email'        => (string) ( $contact['email'] ?? '' ),
+            'first_name'   => (string) ( $contact['firstName'] ?? '' ),
+            'last_name'    => (string) ( $contact['lastName'] ?? '' ),
+            'full_name'    => (string) ( $contact['fullName'] ?? '' ),
+            'phone'        => (string) ( $contact['phone'] ?? '' ),
+            'company_name' => (string) ( $customer['companyName'] ?? '' ),
+            // Legacy alias: old workflow JSONs reference {{ steps.<x>.id }} —
+            // map it to contact_id since that's what create_quote needs.
+            'id'           => (string) ( $contact['id'] ?? '' ),
         ];
     }
 

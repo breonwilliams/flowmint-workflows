@@ -3,7 +3,7 @@
  * Plugin Name: FlowMint Workflows
  * Plugin URI: https://flowmint.dev
  * Description: Async workflow runtime that orchestrates form submissions through configurable pipelines (Drive, Printavo, Email, HTTP, etc.). Companion plugin to Form Runtime Engine.
- * Version: 0.4.0-rc5
+ * Version: 0.4.0-rc7
  * Requires at least: 5.0
  * Requires PHP: 7.4
  * Author: FlowMint
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin version.
-define( 'FMW_VERSION', '0.4.0-rc5' );
+define( 'FMW_VERSION', '0.4.0-rc7' );
 
 // Database schema version. Bump when DDL changes; triggers migration.
 define( 'FMW_DB_VERSION', '0.1.0' );

@@ -6,6 +6,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.0-rc7] — 2026-05-03
+
+### Added
+- **`drive_create_text_file` step type** for creating small text/markdown/HTML files in Drive from in-memory strings. Differs from `drive_upload_file` (which uploads from a FRE entry's file field) — this step takes a `content` string directly, typically built via `{{ template(...) }}` or `{{ data.* }}` interpolation. Lets a workflow drop a structured submission record alongside the design file in the same Drive folder, so the folder is self-describing without cross-referencing other systems.
+- New private method `FMW_Drive_Client::create_text_file($parent_id, $name, $content, $mime_type)` — uses Drive's multipart upload with a hard 1MB cap to prevent accidental misuse on large blobs (which should go through `upload_file`'s chunked path instead).
+
+### Step library now totals 26 step types across 7 categories
+Previously 25 (Phase 1–3 build). The new `drive_create_text_file` slots into the Google Drive category alongside the existing 5 Drive steps.
+
+### Use case for the new step
+Fixes the architectural gap surfaced during 725 Print Lab production testing: Roderick browsing a Drive submission folder would only see the customer's design file (or an empty folder if no design was uploaded), with no record of the form data that triggered the workflow. With the new step, the workflow can drop a `submission.txt` file containing the same structured information that lands in the Printavo Quote `customerNote` — providing defense-in-depth so the data is recoverable from Drive even if Printavo is down or the Quote gets accidentally deleted.
+
+## [0.4.0-rc6] — 2026-05-03
+
+### Changed (BREAKING for workflow JSONs that referenced the old Printavo step output keys)
+
+Major refactor of `FMW_Printavo_Client` and the four Printavo step types to match Printavo's current GraphQL schema. The old client was written against a pre-v2 Printavo schema in which:
+
+- `Contact` had a `companyName` field directly (now removed; companyName lives on `Customer`, with `Contact.customer` providing the relationship)
+- `ContactCreateInput` existed and was the input type for `contactCreate` (now `ContactInput`, and `contactCreate` requires a parent Customer ID via `contactCreate(id: ID, input: ContactInput)`)
+- `invoiceCreate(input: InvoiceCreateInput)` was the way to create a Quote/Invoice (now `quoteCreate(input: QuoteCreateInput)`)
+- Mutations returned a payload wrapper like `{ contact { ... } errors { ... } }` (now mutations return the entity directly — `contactCreate` returns `Contact`, `customerCreate` returns `Customer`, `quoteCreate` returns `Quote`)
+
+Schema verified empirically via live introspection against `https://www.printavo.com/api/v2` on 2026-05-03.
+
+### Client refactor
+
+- `find_customer_by_email` now searches Contacts and traverses to `customer { id companyName }` to surface the company entity. Returns a unified shape with both `contact_id` and `customer_id` plus all the contact's fields.
+- `create_customer` rewritten to call `customerCreate(input: CustomerCreateInput!)`. The schema requires a `primaryContact: ContactInput` inline, so the single mutation creates the Customer (the company) AND its first Contact (the person). Maps a single set of `{ email, name|first_name+last_name, phone, company_name }` args onto both halves.
+- New private helpers: `build_contact_input`, `split_name`, `shape_customer_result`. Centralizes the name-parsing + result-shaping logic instead of duplicating across step files.
+- `create_quote` rewritten to call `quoteCreate(input: QuoteCreateInput!)`. Required schema fields (`contact: IDInput!`, `customerDueAt: ISO8601Date!`, `dueAt: ISO8601DateTime!`) are always provided — the client supplies sensible defaults (`+14 days` and `+30 days at 17:00 UTC`) when callers omit the date fields, so callers never get a 400 for a forgotten required field.
+- `description` workflow arg now maps onto `customerNote` (which is what it always represented). `production_note` arg maps onto `productionNote`. `user_id` arg maps onto `owner: IDInput`.
+- Removed `invoice_status_id` config — no equivalent exists on QuoteCreateInput in the current schema. Quote status is now set via tags or a separate `quoteStatusUpdate` mutation, which is not yet wired in.
+
+### Step output shape changes (BREAKING)
+
+The four Printavo steps (`printavo_find_customer`, `printavo_create_customer`, `printavo_find_or_create_customer`, `printavo_create_quote`) now expose `contact_id` and `customer_id` as separate keys (the old `id` key is preserved as a legacy alias mapping to `contact_id`):
+
+- Old: `{{ steps.customer.id }}` — ambiguous (was a Contact ID despite the name)
+- New: `{{ steps.customer.contact_id }}` for Quote-attaching, `{{ steps.customer.customer_id }}` for company-level references
+- Legacy alias: `{{ steps.customer.id }}` still works (maps to contact_id)
+
+The `printavo_create_quote` step now requires `contact_id` instead of `customer_id`. `customer_id` is accepted as a backwards-compat alias (treated as a Contact ID since that's what the old client did).
+
+Output of `printavo_create_quote` adds: `description`, `public_url`, `customer_due_at`, `due_at`. Removes: `created_at` (Quote schema doesn't expose it on creation; available later via `timestamps.createdAt` if needed).
+
 ## [0.4.0-rc5] — 2026-05-03
 
 ### Fixed

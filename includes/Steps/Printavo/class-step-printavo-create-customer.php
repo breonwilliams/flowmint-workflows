@@ -38,11 +38,15 @@ class FMW_Step_Printavo_Create_Customer extends FMW_Step_Base {
         return [
             'type'       => 'object',
             'properties' => [
-                'id'           => [ 'type' => 'string' ],
+                'contact_id'   => [ 'type' => 'string' ],
+                'customer_id'  => [ 'type' => 'string' ],
                 'email'        => [ 'type' => 'string' ],
                 'first_name'   => [ 'type' => 'string' ],
                 'last_name'    => [ 'type' => 'string' ],
+                'full_name'    => [ 'type' => 'string' ],
+                'phone'        => [ 'type' => 'string' ],
                 'company_name' => [ 'type' => 'string' ],
+                'id'           => [ 'type' => 'string', 'description' => 'Legacy alias for contact_id' ],
             ],
         ];
     }
@@ -57,12 +61,15 @@ class FMW_Step_Printavo_Create_Customer extends FMW_Step_Base {
         $created = $client->create_customer( $this->config );
 
         return [
-            'id'           => $created['id'] ?? '',
+            'contact_id'   => $created['contact_id'] ?? '',
+            'customer_id'  => $created['customer_id'] ?? '',
             'email'        => $created['email'] ?? '',
-            'first_name'   => $created['firstName'] ?? '',
-            'last_name'    => $created['lastName'] ?? '',
+            'first_name'   => $created['first_name'] ?? '',
+            'last_name'    => $created['last_name'] ?? '',
+            'full_name'    => $created['full_name'] ?? '',
             'phone'        => $created['phone'] ?? '',
-            'company_name' => $created['companyName'] ?? '',
+            'company_name' => $created['company_name'] ?? '',
+            'id'           => $created['id'] ?? '',
         ];
     }
 }
