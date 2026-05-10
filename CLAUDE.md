@@ -1,6 +1,15 @@
 # FlowMint Workflows — AI Reference
 
-**Status (as of 2026-05-04, version 0.4.0-rc7):** Phases 0–3 fully complete. Phase 4 (first production migration — 725 Print Lab) deployed to production with workflow runs executing successfully end-to-end across 6 step types; remaining infrastructure unblocks (client-side Drive Shared Drive setup, transactional email transport, Printavo API account-active state) tracked in `_FlowMint-Workflows-Migration/handoff/next-session-primer.md` in the 725 client folder. **READ `docs/TROUBLESHOOTING.md` BEFORE adding a new connector or onboarding a new client** — it captures every gotcha the first deployment surfaced (Printavo schema migration, GraphQL variables encoding, GoDaddy SMTP block, Drive service-account quota, etc.).
+**Status (as of 2026-05-10, version 0.5.0):** Phases 0–3 fully complete. Phase 4 (first production migration — 725 Print Lab) deployed to production with workflow runs executing successfully end-to-end across 6 step types; remaining infrastructure unblocks (client-side Drive Shared Drive setup, transactional email transport, Printavo API account-active state) tracked in `_FlowMint-Workflows-Migration/handoff/next-session-primer.md` in the 725 client folder. **v0.5.0 ships the Claude Cowork MCP connector** — workflows can now be created/inspected/replayed from Claude Desktop via the `FlowMint Workflows → Claude Connection` admin page (closes Critical finding **C2** in `FLOWMINT_AUDIT.md`). **READ `docs/TROUBLESHOOTING.md` BEFORE adding a new connector or onboarding a new client** — it captures every gotcha the first deployment surfaced (Printavo schema migration, GraphQL variables encoding, GoDaddy SMTP block, Drive service-account quota, etc.).
+
+> **💼 Licensing model (clarified 2026-05-10):** This plugin is **FREE**. No Freemius, no premium tier, no license gates. Only Promptless WP is sold; FlowMint, FRE, and PRE are all free and exist to add value to the Promptless ecosystem. The connector and every endpoint are gated only by WP user capability (`manage_options`) plus the connector kill switch — never by license state.
+
+> **🤖 MCP connector (v0.5.0):** Claude Desktop bridge lives at `includes/Connectors/MCP/`:
+> - `assets/flowmint-connector.js` — stdio MCP server, 16 tools mapping 1:1 to the REST endpoints under `flowmint/v1/connector/*`
+> - `class-fmw-connector-admin.php` — admin page (App Password generate/revoke + Terminal install command)
+> - `class-fmw-connector-settings.php` — kill-switch state class
+>
+> Setup flow for end users: WP admin → FlowMint Workflows → Claude Connection → toggle "Enable Claude Cowork Connection" → Generate Connection → copy the Terminal command, paste into macOS Terminal, restart Claude Desktop. Default state is **disabled**; `FMW_REST_Auth::require_manage()` checks both `manage_options` and the kill switch (with `/preflight` exempt so Claude can introspect "is this on?" without it being on). See `docs/MCP_CONNECTOR_SETUP.md` for full setup notes.
 
 A WordPress plugin that turns FormEngine submissions into multi-step workflows — Drive uploads, Printavo Quote creation, customer ack emails, conditional branches, etc. — without requiring an external orchestrator like Zapier.
 

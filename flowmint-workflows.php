@@ -3,7 +3,7 @@
  * Plugin Name: FlowMint Workflows
  * Plugin URI: https://flowmint.dev
  * Description: Async workflow runtime that orchestrates form submissions through configurable pipelines (Drive, Printavo, Email, HTTP, etc.). Companion plugin to Form Runtime Engine.
- * Version: 0.4.0-rc7
+ * Version: 0.5.0
  * Requires at least: 5.0
  * Requires PHP: 7.4
  * Author: FlowMint
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin version.
-define( 'FMW_VERSION', '0.4.0-rc7' );
+define( 'FMW_VERSION', '0.5.0' );
 
 // Database schema version. Bump when DDL changes; triggers migration.
 define( 'FMW_DB_VERSION', '0.1.0' );
@@ -218,6 +218,13 @@ final class FlowMint_Workflows {
         // Admin (only in admin context).
         if ( is_admin() ) {
             new FMW_Admin();
+
+            // Claude Cowork connector admin page — registers the
+            // FlowMint Workflows → Claude Connection submenu and the
+            // AJAX handlers for password generate/revoke + connector
+            // toggle + MCP script download. Available on all installs;
+            // FlowMint's connector is an add-on, not a premium feature.
+            ( new FMW_Connector_Admin() )->init();
         }
     }
 

@@ -244,7 +244,7 @@ These ideas are captured here so they don't get lost, but none are committed wor
 - **Sub-workflows:** a workflow can call another workflow.
 - **Scheduled workflows:** cron triggers, not just form submissions.
 - **Approval steps:** human-in-the-loop, workflow pauses for approval before continuing.
-- **Open-source / commercial release:** distribute the plugin publicly (with a paid tier for premium connectors / support).
+- **Open-source release:** distribute the plugin publicly as free software. (Earlier drafts of this doc speculated about a paid tier; that's been superseded by the 2026-05-10 business decision — only Promptless is sold, FlowMint stays free. See `CLAUDE.md` for the canonical statement.)
 
 ## How this plugin will evolve
 

@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-05-10
+
+### Added — Claude Cowork MCP connector
+
+Closes the **Critical C2** finding in `FLOWMINT_AUDIT.md`: the WordPress-side REST connector at `flowmint/v1/connector/*` had been built in v0.3.0, but the client-side MCP bridge that lets Claude Desktop reach those endpoints was missing. This release ships the bridge.
+
+**New files**
+- `includes/Connectors/MCP/assets/flowmint-connector.js` — single-file Node.js stdio MCP server. Exposes 16 tools (preflight, full workflow CRUD, run history + replay, step type catalog, credential introspection + test, template read). Maps 1:1 to the existing REST endpoints. Forked from the Form Runtime Engine connector with FlowMint-specific tool definitions and route paths.
+- `includes/Connectors/MCP/class-fmw-connector-admin.php` — `FlowMint Workflows → Claude Connection` admin page. Generates and revokes the WordPress Application Password, builds the one-line install command users paste into Terminal, serves the MCP server JS file via `admin-ajax.php?action=fmw_download_connector`.
+- `includes/Connectors/MCP/class-fmw-connector-settings.php` — small data-access class for the connector kill-switch state. Pure read/write of `fmw_connector_enabled` option and per-user `_fmw_connector_configured_at` meta.
+
+**Install path / Claude Desktop config**
+- MCP server lands at `~/flowmint-mcp/flowmint-connector.js` on the user's Mac (parallel to FRE's `~/form-engine-mcp/` and Promptless's `~/promptless-mcp/` so the three connectors don't collide).
+- Claude Desktop entry name: `flowmint-workflows` (matches the plugin slug, distinct from `form-engine-wordpress` and `promptless-wordpress`).
+- Env vars: `FLOWMINT_SITE_URL`, `FLOWMINT_USERNAME`, `FLOWMINT_APP_PASSWORD`.
+
+**Two-gate security model**
+- Connector defaults to **disabled** site-wide. Admin must explicitly opt in via the Claude Connection page before any REST endpoint responds.
+- Existing `manage_options` capability check on every endpoint stays — the kill switch is layered on top of it. `/preflight` is exempt from the kill switch so Claude can introspect "is the connector enabled?" without it being on.
+- App Password generation revokes any prior FlowMint App Password for the user, so there's at most one active connector key per user at any time.
+
+### Changed
+- `FMW_REST_Auth::require_manage()` now also checks the connector-enabled flag (except on `/preflight`). Backward-compatible: the only behavior change is endpoints returning 403 `connector_disabled` when the kill switch is off, which is the intended security posture.
+- `FMW_REST_Preflight` now returns the actual `connector_enabled` flag value (was hardcoded `true`). The MCP surfaces this so users get an actionable "enable the connector in WP admin" message instead of opaque 403s.
+- `FMW_Autoloader::$namespace_map` adds `'FMW_Connector' => 'Connectors/MCP'` so `FMW_Connector_Admin` and `FMW_Connector_Settings` autoload from the new subfolder.
+
+### Notes
+- This connector is available on every install — FlowMint Workflows is positioned as a value-add plugin alongside Promptless WP (the premium product), not as a paid product itself. No Freemius gating.
+
 ## [0.4.0-rc7] — 2026-05-03
 
 ### Added

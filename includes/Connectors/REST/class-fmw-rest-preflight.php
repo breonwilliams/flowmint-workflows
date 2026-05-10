@@ -30,10 +30,18 @@ class FMW_REST_Preflight {
             'slack_webhook'         => FMW_Credential_Store::is_configured( 'slack_webhook' ),
         ];
 
+        $connector_enabled = class_exists( 'FMW_Connector_Settings' )
+            ? FMW_Connector_Settings::is_enabled()
+            : (bool) get_option( 'fmw_connector_enabled', false );
+
         return rest_ensure_response( FMW_REST_Auth::success( [
             'plugin_version'         => FMW_VERSION,
             'connector_api_version'  => 'v1',
-            'connector_enabled'      => true,
+            // Reports the actual kill-switch state. When false, every other
+            // endpoint returns 403 connector_disabled — the MCP shows this
+            // value to the user so they know to enable the connector in
+            // WP admin before trying to do anything else.
+            'connector_enabled'      => $connector_enabled,
             'fre_active'             => defined( 'FRE_VERSION' ),
             'fre_version'            => defined( 'FRE_VERSION' ) ? FRE_VERSION : null,
             'action_scheduler_active' => function_exists( 'as_enqueue_async_action' ),

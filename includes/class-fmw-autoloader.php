@@ -42,6 +42,10 @@ class FMW_Autoloader {
         'FMW_Submission'     => 'Core',
         // REST
         'FMW_REST'           => 'Connectors/REST',
+        // MCP connector (Claude Desktop bridge — admin page + state class).
+        // Asset file (.js) ships under Connectors/MCP/assets/ but is not
+        // autoloaded; it's served via FMW_Connector_Admin::ajax_download_connector().
+        'FMW_Connector'      => 'Connectors/MCP',
         // External service clients
         'FMW_Drive_Client'   => 'Connectors',
         'FMW_Email_Client'   => 'Connectors',

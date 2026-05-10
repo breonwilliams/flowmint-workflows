@@ -34,6 +34,81 @@ Findings graded **Critical** (do soon — actively limiting velocity or acceptin
 
 ---
 
+### C2. MCP connector files are missing from this plugin — connector is unreachable from Claude Desktop
+
+**Status:** ✅ **Fixed in v0.5.0 (2026-05-10).** Three files added:
+- `includes/Connectors/MCP/assets/flowmint-connector.js` — stdio MCP server, 16 tools mapped 1:1 to existing REST routes
+- `includes/Connectors/MCP/class-fmw-connector-admin.php` — `FlowMint Workflows → Claude Connection` admin page with App Password generate/revoke and one-line install command
+- `includes/Connectors/MCP/class-fmw-connector-settings.php` — kill-switch state class
+
+Two-gate security: connector defaults to disabled site-wide, admin opts in via the Claude Connection page. `FMW_REST_Auth::require_manage()` now enforces both `manage_options` and the kill switch (with `/preflight` exempt so Claude can introspect the state). See `CHANGELOG.md` v0.5.0 for the full changeset and `docs/MCP_CONNECTOR_SETUP.md` for end-user setup instructions.
+
+The original finding is preserved below for historical context.
+
+---
+
+**Discovered:** 2026-05-10 during the cross-plugin connector pressure test.
+
+**Where:** two files are missing from this plugin folder. The WordPress-side REST connector at `flowmint/v1/connector/*` is fully built (`includes/Connectors/REST/class-fmw-rest-{auth,preflight,workflows,runs,step-types,credentials,templates,api}.php`), but the *delivery* layer that bridges that REST API to Claude Desktop's MCP transport is absent.
+
+**Architecture clarification — not a separate project, files inside this plugin:**
+
+Every other connector-enabled plugin in this ecosystem ships the MCP server inline. The pattern is identical across all three:
+
+| Plugin | MCP server file | Admin class |
+|---|---|---|
+| Promptless | `includes/Connector/assets/wordpress-connector.js` | `includes/Admin/ConnectorSettings.php` |
+| FRE | `includes/Connector/assets/form-engine-connector.js` | `includes/Connector/class-fre-connector-admin.php` |
+| PRE | `includes/Connector/assets/post-runtime-connector.js` | `includes/Connector/class-pre-connector-admin.php` |
+| **FlowMint** | **(missing — needs to be added)** | **(missing — needs to be added)** |
+
+**How the pattern works end-to-end:**
+
+1. The plugin ships `<plugin>-connector.js` as a static asset inside the plugin folder. It's a stdio MCP server: a Node.js script that speaks JSON-RPC on stdin/stdout, makes HTTPS calls to the WP REST API, and exposes tools to Claude Desktop.
+2. The admin class registers a WP admin submenu page where the user sees their connection status, generates an Application Password, and gets a one-line terminal command to run on their Mac.
+3. The terminal command does two things: (a) downloads the `<plugin>-connector.js` file from the user's WordPress site via an `admin-ajax.php` action handler in the admin class, saving it to a small folder on the user's machine; (b) writes one entry into Claude Desktop's config (`claude_desktop_config.json`) telling it to spawn that local JS file with the right env vars (site URL + username + app password).
+4. After a Claude Desktop restart, the MCP server is live. Tools like `flowmint_list_workflows`, `flowmint_create_workflow`, etc. become callable from Claude.
+
+**Why it's critical:**
+
+- The architectural intent stated in `CLAUDE.md` § "Companion to FormEngine" and `docs/ROADMAP.md` Phase 1 is that workflows can be created and managed by AI tools "the same way FormEngine forms are." Without the MCP files inside this plugin, that intent is not realized — every new client today requires either hand-authoring workflow JSON in the WP database OR direct REST API calls via curl.
+- The user's mental model and the audit's mental model both assumed FlowMint would be reachable through Claude. Pressure-testing proved it isn't.
+- Velocity cost compounds with each new client. Every minute saved during workflow setup is a minute the operator (FlowMint) doesn't bill for setup overhead.
+
+**Recommended fix:**
+
+Mirror the existing FRE / PRE pattern — copy the structure of `class-fre-connector-admin.php` and `form-engine-connector.js` line-for-line, then adapt for FlowMint's REST routes. Specifically:
+
+1. **Add `includes/Connector/assets/flowmint-connector.js`** — stdio MCP server. Adapt the FRE version (`form-engine-connector.js`) since FlowMint's REST shape is closest to FRE's. Expose tools mapping 1:1 to the existing REST routes:
+
+- `flowmint_preflight` → GET `/preflight`
+- `flowmint_list_step_types` → GET `/step-types`
+- `flowmint_list_workflows` → GET `/workflows`
+- `flowmint_get_workflow` → GET `/workflows/{id}`
+- `flowmint_create_workflow` → POST `/workflows`
+- `flowmint_update_workflow` → PATCH `/workflows/{id}`
+- `flowmint_delete_workflow` → DELETE `/workflows/{id}`
+- `flowmint_list_runs` → GET `/runs`
+- `flowmint_get_run` → GET `/runs/{id}`
+- `flowmint_replay_run` → POST `/runs/{id}/replay`
+- `flowmint_list_credentials` → GET `/credentials`
+- `flowmint_test_credential` → POST `/credentials/{key}/test`
+- `flowmint_list_templates` → GET `/templates`
+
+Tag every workflow created via this MCP with `managed_by: connector:cowork` (mirrors FRE's pattern). Filter list_workflows to support `managed_by` so AI agents don't accidentally modify hand-authored workflows.
+
+2. **Add `includes/Connector/class-fmw-connector-admin.php`** — admin submenu page. Adapt the FRE version. Responsibilities: render the connection-status UI, generate Application Passwords, generate the one-line terminal command users run, expose the `wp_ajax_fmw_download_connector` action handler that serves the JS file as a download. The admin page is where the user sees "✓ Connected" / "Not connected" state, the Generate / Revoke buttons, and the copy-this-command box.
+
+3. **Wire it up in the main plugin file (`flowmint-workflows.php`)** — instantiate the connector admin class on `admin_menu` for any user with `manage_options`. **No license gate** — FlowMint is a free plugin. Only Promptless uses Freemius; PRE and FRE are also free. If FRE's reference admin class includes a `can_use_premium()` check, strip it for the FlowMint port.
+
+4. **Test against staging** — install the new plugin build on the user's staging site, run the terminal command they're shown, verify Claude Desktop spawns the new MCP server, run `flowmint_preflight` to confirm authentication, then exercise create_workflow → trigger via FRE submission → verify the run appears via `flowmint_list_runs`.
+
+**Effort:** ~4–6 hours. The REST API is already built and tested through Wave 1 unit tests; the connector files are pattern-matching against three existing reference implementations. Estimate accounts for: copying FRE's connector JS + admin class, adapting tool names and route paths for FlowMint's surface (~13 tools), testing the install command flow on staging, smoke testing each MCP tool, documenting setup in `docs/MCP_CONNECTOR_SETUP.md` (mirror FRE's), and one Claude Desktop install/restart cycle to verify end-to-end.
+
+**Priority:** HIGH for the next session. This is the single biggest velocity unblock for FlowMint. Without it, every prospective FlowMint client is a manual setup. With it, conversational workflow design becomes possible.
+
+---
+
 ## Important
 
 ### I1. Submission listener doesn't check Action Scheduler enqueue return value
