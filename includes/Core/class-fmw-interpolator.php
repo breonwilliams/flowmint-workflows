@@ -79,11 +79,22 @@ class FMW_Interpolator {
      * @return mixed
      */
     public function interpolate_string( $str ) {
-        // Special case: entire string is a single {{ expr }} — preserve the
-        // resolved value's native type instead of stringifying.
-        $whole_match_pattern = '/^\s*\{\{\s*(.*?)\s*\}\}\s*$/s';
-        if ( preg_match( $whole_match_pattern, $str, $m ) ) {
-            return $this->resolve_expression( $m[1] );
+        // Special case: entire string is a single {{ expr }} — preserve
+        // the resolved value's native type instead of stringifying.
+        //
+        // The substr_count guard is REQUIRED. The regex below uses
+        // non-greedy `(.*?)` but the trailing `$` anchor forces the
+        // engine to match all the way to the LAST `}}` in the string.
+        // For an input like "{{ a }} {{ b }}", that means `(.*?)`
+        // ends up capturing `"a }} {{ b"` — which then gets resolved
+        // as a garbage path and silently returns empty string. The
+        // count check ensures we only take the whole-match fast path
+        // when there is genuinely one and only one `{{ ... }}` block.
+        if ( substr_count( $str, '{{' ) === 1 ) {
+            $whole_match_pattern = '/^\s*\{\{\s*(.*?)\s*\}\}\s*$/s';
+            if ( preg_match( $whole_match_pattern, $str, $m ) ) {
+                return $this->resolve_expression( $m[1] );
+            }
         }
 
         // Otherwise, replace each {{ expr }} occurrence with stringified value.

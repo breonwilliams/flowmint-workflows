@@ -47,11 +47,24 @@ class FMW_Printavo_Client {
      *
      * Credential value is JSON: {"email": "...", "token": "..."}
      *
+     * Distinguishes three states (per credential-store audit item I2):
+     *   - null         → never configured        → credential_not_configured
+     *   - WP_Error     → present but unreadable  → credential_unreadable
+     *   - non-empty    → continue to JSON-parse
+     *
      * @return self
      * @throws FMW_Step_Exception
      */
     public static function from_credentials() {
         $raw = FMW_Credential_Store::get( 'printavo_api_token' );
+
+        if ( is_wp_error( $raw ) ) {
+            throw new FMW_Step_Exception(
+                'credential_unreadable',
+                'Printavo credential is stored but could not be decrypted: ' . $raw->get_error_message()
+            );
+        }
+
         if ( empty( $raw ) ) {
             throw new FMW_Step_Exception(
                 'credential_not_configured',

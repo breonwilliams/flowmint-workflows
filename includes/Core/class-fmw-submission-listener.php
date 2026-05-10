@@ -73,18 +73,42 @@ class FMW_Submission_Listener {
             return;
         }
 
-        // Enqueue.
-        as_enqueue_async_action(
+        // Enqueue. Audit fix (item I1): Action Scheduler returns the
+        // action ID on success or 0 on failure. We must check —
+        // otherwise an enqueue failure leaves the run row stuck in
+        // 'queued' state forever with no scheduled job to pick it up,
+        // which presents in the admin UI as a confusing orphan that
+        // looks superficially identical to a queued-but-not-yet-
+        // processed run.
+        $action_id = as_enqueue_async_action(
             'fmw_run_workflow',
             [ $run_id ],
             'fmw' // group
         );
+
+        if ( ! $action_id ) {
+            FMW_Run_Repository::mark_failed(
+                $run_id,
+                'enqueue_failed',
+                'Action Scheduler returned 0 from as_enqueue_async_action — the workflow could not be enqueued for async execution. This is rare; check the Action Scheduler log for context.'
+            );
+
+            FMW_Logger::error( 'Workflow enqueue failed', [
+                'run_id'      => $run_id,
+                'workflow_id' => $workflow->id(),
+                'form_id'     => $form_id,
+                'entry_id'    => $entry_id,
+            ] );
+
+            return;
+        }
 
         FMW_Logger::info( 'Workflow run enqueued', [
             'run_id'      => $run_id,
             'workflow_id' => $workflow->id(),
             'form_id'     => $form_id,
             'entry_id'    => $entry_id,
+            'action_id'   => $action_id,
         ] );
     }
 }

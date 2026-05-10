@@ -22,10 +22,35 @@ class FMW_Credential_Store {
     const CIPHER         = 'aes-256-gcm';
 
     /**
-     * Get a credential by key. Returns plaintext value or null.
+     * Get a credential by key.
+     *
+     * Audit fix (item I2): the return shape now distinguishes three
+     * states that callers care about:
+     *
+     *   - null     → no credential is stored (the "not configured" state)
+     *   - WP_Error → credential IS stored but cannot be decrypted
+     *                (corrupted bundle, salt rotation after a host
+     *                migration, openssl extension removed, etc.)
+     *   - string   → decrypted plaintext value
+     *
+     * Before this fix, both "not configured" and "unreadable" returned
+     * null, which made admin UIs and connector clients show "Twilio
+     * not configured" when the real story was "Twilio credentials
+     * present but couldn't be decrypted, please re-enter them."
+     *
+     * Callers should pattern-match on the return type:
+     *
+     *   $value = FMW_Credential_Store::get( 'service_x' );
+     *   if ( is_wp_error( $value ) ) {
+     *       // present but unreadable — surface the error to the admin
+     *   } elseif ( $value === null ) {
+     *       // never configured — show setup UI
+     *   } else {
+     *       // ready to use
+     *   }
      *
      * @param string $key e.g., "drive_service_account", "printavo_api_token"
-     * @return string|null
+     * @return string|WP_Error|null
      */
     public static function get( $key ) {
         // Allow filter overrides (e.g., wp-config.php constants for CI/test).
@@ -39,6 +64,7 @@ class FMW_Credential_Store {
             return null;
         }
 
+        // decrypt() now returns WP_Error on failure; we propagate it.
         return self::decrypt( $stored );
     }
 
@@ -134,22 +160,56 @@ class FMW_Credential_Store {
     /**
      * Decrypt a value.
      *
+     * Audit fix (item I2): returns WP_Error with a specific code on
+     * failure rather than null. The caller (get()) propagates the
+     * WP_Error so admins can distinguish "credential present but
+     * unreadable" from "credential not configured". Each failure
+     * mode gets its own error code so the admin UI can show a
+     * targeted message:
+     *
+     *   - openssl_missing      → server lost the openssl extension
+     *   - bundle_decode_failed → wp_options value isn't valid base64
+     *   - bundle_truncated     → bundle is too short to contain a
+     *                            valid version + IV + tag + ciphertext
+     *   - bundle_unknown_version → bundle's version byte isn't a
+     *                              version we know how to decrypt
+     *   - decryption_failed    → cipher ran but returned false
+     *                            (corrupted ciphertext OR rotated salt
+     *                            OR tampered tag)
+     *
      * @param string $encoded Base64-encoded ciphertext bundle
-     * @return string|null
+     * @return string|WP_Error Plaintext on success, WP_Error on failure.
      */
     private static function decrypt( $encoded ) {
         if ( ! function_exists( 'openssl_decrypt' ) ) {
-            return null;
+            return new \WP_Error(
+                'openssl_missing',
+                __( 'Stored credential cannot be decrypted: the PHP openssl extension is unavailable on this server. Contact your host to enable openssl.', 'flowmint-workflows' )
+            );
         }
 
         $bundle = base64_decode( $encoded, true );
-        if ( $bundle === false || strlen( $bundle ) < 1 + 12 + 16 ) {
-            return null;
+        if ( $bundle === false ) {
+            return new \WP_Error(
+                'bundle_decode_failed',
+                __( 'Stored credential bundle is not valid base64. The wp_options row may have been corrupted or manually edited.', 'flowmint-workflows' )
+            );
+        }
+
+        if ( strlen( $bundle ) < 1 + 12 + 16 ) {
+            return new \WP_Error(
+                'bundle_truncated',
+                __( 'Stored credential bundle is too short to contain a valid version + IV + tag.', 'flowmint-workflows' )
+            );
         }
 
         $version = ord( $bundle[0] );
         if ( $version !== 1 ) {
-            return null; // unknown version
+            return new \WP_Error(
+                'bundle_unknown_version',
+                /* translators: %d: bundle version byte that the plugin does not know how to decrypt */
+                sprintf( __( 'Stored credential bundle has unknown version byte: %d', 'flowmint-workflows' ), $version )
+            );
         }
 
         $iv         = substr( $bundle, 1, 12 );
@@ -168,7 +228,14 @@ class FMW_Credential_Store {
             ''
         );
 
-        return $plaintext === false ? null : $plaintext;
+        if ( $plaintext === false ) {
+            return new \WP_Error(
+                'decryption_failed',
+                __( 'Stored credential present but could not be decrypted. This usually means the WordPress security salts have rotated since the credential was saved, the ciphertext was tampered with, or the bundle was corrupted. Please re-enter the credential.', 'flowmint-workflows' )
+            );
+        }
+
+        return $plaintext;
     }
 
     /**

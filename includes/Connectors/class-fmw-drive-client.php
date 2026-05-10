@@ -67,17 +67,36 @@ class FMW_Drive_Client {
     /**
      * Construct from configured credential.
      *
+     * Distinguishes three states (per credential-store audit item I2):
+     *   - null         → never configured        → credential_not_configured
+     *   - WP_Error     → present but unreadable  → credential_unreadable
+     *   - non-empty    → ready to use
+     *
      * @return self
-     * @throws FMW_Step_Exception If credential not configured.
+     * @throws FMW_Step_Exception If credential not configured or unreadable.
      */
     public static function from_credentials() {
         $json = FMW_Credential_Store::get( 'drive_service_account' );
+
+        if ( is_wp_error( $json ) ) {
+            // The credential IS stored but the decryption layer
+            // couldn't read it back. Surface this as its own error
+            // code so admins see "re-enter credentials" rather than
+            // "set up the integration" — those are very different
+            // remediation steps.
+            throw new FMW_Step_Exception(
+                'credential_unreadable',
+                'Drive service account credential is stored but could not be decrypted: ' . $json->get_error_message()
+            );
+        }
+
         if ( empty( $json ) ) {
             throw new FMW_Step_Exception(
                 'credential_not_configured',
                 'Drive service account credential is not configured. Set via /credentials/drive_service_account.'
             );
         }
+
         return new self( $json );
     }
 
