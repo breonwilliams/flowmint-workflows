@@ -177,6 +177,18 @@ These are documented in detail in `docs/ARCHITECTURE.md`. Quick summary:
 - **No client-specific code in the plugin.** All client-specific configuration (Drive folder IDs, Printavo user IDs, email templates) lives in the workflow JSON, never in the plugin codebase.
 - **Test coverage is required for v1 ship.** Each step type ships with unit tests. Each integration ships with at least one end-to-end test. Coverage target: >80%.
 
+## Releasing New Versions
+
+**Canonical release procedure: [`RELEASE.md`](RELEASE.md)** at the plugin root. That document is the single source of truth — version-stamp locations, pre-release checklist, build commands (including the `composer install --no-dev` step the build script depends on), tag pattern, `gh release create` invocation, post-release verification.
+
+Special considerations FlowMint releases require:
+
+- **FRE dependency check.** FlowMint requires `FMW_REQUIRED_FRE_VERSION` (currently 1.6.0). Bumping that constant is a breaking change; coordinate with FRE's release cadence.
+- **Database schema version.** Schema-affecting changes must also bump `FMW_DB_VERSION` to trigger the migration on next load — separate from the plugin version.
+- **Vendor dir.** The build script runs `composer install --no-dev` inside the staged copy; Composer must be on PATH or the ZIP will ship with dev dependencies (or no vendor/ at all).
+
+**One-line summary:** update version stamps in `flowmint-workflows.php` (header + `FMW_VERSION` constant), `readme.txt` (Stable tag + Upgrade Notice), and `CHANGELOG.md` → commit → `git tag v0.6.0` → `git push --tags` → `./bin/build-release.sh` → `gh release create v0.6.0 build/flowmint-workflows.zip --notes-file CHANGELOG.md`.
+
 ---
 
 **Plugin status:** scaffolding complete, design docs in progress, no runtime code yet. See `docs/ROADMAP.md` for what comes next.
