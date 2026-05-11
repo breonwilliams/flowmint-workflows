@@ -517,7 +517,10 @@ class FMW_Connector_Admin {
         header( 'Content-Disposition: inline; filename="flowmint-connector.js"' );
         header( 'Cache-Control: no-cache, must-revalidate' );
 
-        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+        // File is a static plugin-shipped JavaScript asset (the MCP connector),
+        // not user-controlled input. Output must be raw JS, so it is intentionally
+        // not run through esc_*; the content is plugin-controlled and has no XSS surface.
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents, WordPress.Security.EscapeOutput.OutputNotEscaped
         echo file_get_contents( $path );
         exit;
     }

@@ -82,7 +82,7 @@ class FMW_Step_Fre_Delete_Entry extends FMW_Step_Base {
             $result = $repo->delete( $entry_id );
             if ( $result === false || is_wp_error( $result ) ) {
                 $message = is_wp_error( $result ) ? $result->get_error_message() : 'Unknown delete failure';
-                throw new FMW_Step_Exception( 'fre_delete_failed', $message );
+                throw new FMW_Step_Exception( 'fre_delete_failed', esc_html( $message ) );
             }
         } else {
             throw new FMW_Step_Exception(

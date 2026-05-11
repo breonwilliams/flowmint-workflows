@@ -30,10 +30,12 @@ class FMW_Workflow_Repository {
     public static function get( $id ) {
         global $wpdb;
 
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- self::table() returns a $wpdb->prefix-derived table name (plugin-controlled); $id flows through %s.
         $row = $wpdb->get_row(
             $wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE id = %s', $id ),
             ARRAY_A
         );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
         return $row ?: null;
     }
@@ -50,6 +52,7 @@ class FMW_Workflow_Repository {
     public static function get_for_form( $form_id ) {
         global $wpdb;
 
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- self::table() returns a $wpdb->prefix-derived table name (plugin-controlled); $form_id flows through %s.
         $row = $wpdb->get_row(
             $wpdb->prepare(
                 'SELECT * FROM ' . self::table() . ' WHERE form_id = %s AND enabled = 1 ORDER BY updated_at DESC LIMIT 1',
@@ -57,6 +60,7 @@ class FMW_Workflow_Repository {
             ),
             ARRAY_A
         );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
         return $row ?: null;
     }
@@ -108,6 +112,7 @@ class FMW_Workflow_Repository {
         $where_sql = implode( ' AND ', $where );
         $offset    = max( 0, ( $args['page'] - 1 ) * $args['per_page'] );
 
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- self::table() is a plugin-controlled table name; $where_sql is composed from a fixed allow-list of column predicates above (form_id, enabled, managed_by) using %s/%d placeholders; user values flow through $params via prepare().
         $sql = 'SELECT * FROM ' . self::table() . ' WHERE ' . $where_sql . ' ORDER BY updated_at DESC LIMIT %d OFFSET %d';
         $items = $wpdb->get_results(
             $params
@@ -120,6 +125,7 @@ class FMW_Workflow_Repository {
         $total = (int) $wpdb->get_var(
             $params ? $wpdb->prepare( $count_sql, $params ) : $count_sql
         );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
         return [
             'items' => $items ?: [],
@@ -240,9 +246,11 @@ class FMW_Workflow_Repository {
         if ( $cascade ) {
             // Delete child rows first.
             $tables = FMW_Schema::get_table_names();
+            // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- $tables[*] values are plugin-controlled table names from FMW_Schema::get_table_names(); $id flows through %s.
             $run_ids = $wpdb->get_col(
                 $wpdb->prepare( 'SELECT id FROM ' . $tables['workflow_runs'] . ' WHERE workflow_id = %s', $id )
             );
+            // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
             if ( $run_ids ) {
                 $placeholders = implode( ',', array_fill( 0, count( $run_ids ), '%d' ) );
                 $wpdb->query( $wpdb->prepare(

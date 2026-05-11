@@ -84,7 +84,12 @@ class FMW_Step_Email_Send_Template extends FMW_Step_Base {
         if ( $body === null ) {
             throw new FMW_Step_Exception(
                 'template_not_found',
-                "send_email_template: template '{$template_name}' not found at {$template_dir}{$template_name}.html or .txt"
+                sprintf(
+                    "send_email_template: template '%s' not found at %s%s.html or .txt",
+                    esc_html( $template_name ),
+                    esc_html( $template_dir ),
+                    esc_html( $template_name )
+                )
             );
         }
 

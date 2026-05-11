@@ -63,7 +63,11 @@ class FMW_Step_Fre_Update_Entry_Status extends FMW_Step_Base {
         if ( ! in_array( $new_status, $allowed, true ) ) {
             throw new FMW_Step_Exception(
                 'config_error',
-                "fre_update_entry_status: invalid status '{$new_status}'. Must be one of: " . implode( ', ', $allowed )
+                sprintf(
+                    "fre_update_entry_status: invalid status '%s'. Must be one of: %s",
+                    esc_html( $new_status ),
+                    esc_html( implode( ', ', $allowed ) )
+                )
             );
         }
 
@@ -81,7 +85,7 @@ class FMW_Step_Fre_Update_Entry_Status extends FMW_Step_Base {
         if ( ! $existing ) {
             throw new FMW_Step_Exception(
                 'entry_not_found',
-                "fre_update_entry_status: entry {$entry_id} not found."
+                sprintf( 'fre_update_entry_status: entry %d not found.', (int) $entry_id )
             );
         }
 

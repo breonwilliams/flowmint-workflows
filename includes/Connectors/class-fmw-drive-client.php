@@ -86,7 +86,7 @@ class FMW_Drive_Client {
             // remediation steps.
             throw new FMW_Step_Exception(
                 'credential_unreadable',
-                'Drive service account credential is stored but could not be decrypted: ' . $json->get_error_message()
+                'Drive service account credential is stored but could not be decrypted: ' . esc_html( $json->get_error_message() )
             );
         }
 
@@ -209,14 +209,14 @@ class FMW_Drive_Client {
         if ( ! file_exists( $local_path ) ) {
             throw new FMW_Step_Exception(
                 'file_not_found',
-                "Drive upload: local file does not exist: {$local_path}"
+                sprintf( 'Drive upload: local file does not exist: %s', esc_html( $local_path ) )
             );
         }
 
         if ( ! is_readable( $local_path ) ) {
             throw new FMW_Step_Exception(
                 'file_not_readable',
-                "Drive upload: cannot read local file: {$local_path}"
+                sprintf( 'Drive upload: cannot read local file: %s', esc_html( $local_path ) )
             );
         }
 
@@ -280,7 +280,7 @@ class FMW_Drive_Client {
         if ( $size > $cap ) {
             throw new FMW_Step_Exception(
                 'invalid_input',
-                sprintf( 'Drive create_text_file: content exceeds %d-byte cap (got %d). Use upload_file with a local path for larger payloads.', $cap, $size )
+                sprintf( 'Drive create_text_file: content exceeds %d-byte cap (got %d). Use upload_file with a local path for larger payloads.', (int) $cap, (int) $size )
             );
         }
 
@@ -341,13 +341,22 @@ class FMW_Drive_Client {
         $media->setFileSize( $size );
 
         $status = false;
+        // Streaming binary upload to Google Drive via the Google API client's
+        // chunked-upload protocol. WP_Filesystem does not expose a streaming
+        // chunked-read API — its put_contents/get_contents methods load the
+        // entire file into memory, which would defeat the purpose of chunked
+        // uploads (and OOM the worker on multi-GB files). Direct PHP file I/O
+        // is the correct mechanism here.
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
         $handle = fopen( $local_path, 'rb' );
 
         while ( ! $status && ! feof( $handle ) ) {
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread
             $chunk  = fread( $handle, $chunk_size );
             $status = $media->nextChunk( $chunk );
         }
 
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
         fclose( $handle );
         $client->setDefer( false );
 
@@ -439,9 +448,9 @@ class FMW_Drive_Client {
         ] );
 
         throw new FMW_Step_Exception(
-            $code,
-            "Drive {$operation} failed: {$message}",
-            [ 'http_code' => $http_code ]
+            esc_html( $code ),
+            sprintf( 'Drive %s failed: %s', esc_html( $operation ), esc_html( $message ) ),
+            [ 'http_code' => (int) $http_code ]
         );
     }
 }

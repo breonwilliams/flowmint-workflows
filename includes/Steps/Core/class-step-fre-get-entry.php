@@ -81,7 +81,7 @@ class FMW_Step_Fre_Get_Entry extends FMW_Step_Base {
         if ( ! $entry ) {
             throw new FMW_Step_Exception(
                 'entry_not_found',
-                "fre_get_entry: entry {$entry_id} not found."
+                sprintf( 'fre_get_entry: entry %d not found.', (int) $entry_id )
             );
         }
 

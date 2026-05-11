@@ -86,7 +86,7 @@ class FMW_Step_Drive_Share_Link extends FMW_Step_Base {
                 }
                 break;
             default:
-                throw new FMW_Step_Exception( 'config_error', "drive_share_link: invalid permission_type '{$type}'." );
+                throw new FMW_Step_Exception( 'config_error', sprintf( "drive_share_link: invalid permission_type '%s'.", esc_html( $type ) ) );
         }
 
         $client = FMW_Drive_Client::from_credentials();

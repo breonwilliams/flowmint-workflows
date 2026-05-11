@@ -201,7 +201,7 @@ class FMW_REST_Templates {
         $other_ext = $extension === 'txt' ? 'html' : 'txt';
         $other_path = $dir . $name . '.' . $other_ext;
         if ( file_exists( $other_path ) ) {
-            @unlink( $other_path );
+            wp_delete_file( $other_path );
         }
 
         FMW_Logger::info( 'Template saved', [ 'name' => $name, 'extension' => $extension, 'size' => strlen( $content ) ] );
@@ -231,8 +231,11 @@ class FMW_REST_Templates {
         $deleted = [];
         foreach ( self::ALLOWED_EXTENSIONS as $ext ) {
             $path = $dir . $name . '.' . $ext;
-            if ( file_exists( $path ) && @unlink( $path ) ) {
-                $deleted[] = $ext;
+            if ( file_exists( $path ) ) {
+                wp_delete_file( $path );
+                if ( ! file_exists( $path ) ) {
+                    $deleted[] = $ext;
+                }
             }
         }
 
@@ -307,6 +310,12 @@ class FMW_REST_Templates {
             if ( $bytes === false ) {
                 return new WP_Error( 'write_failed', "Failed to write template at {$path}." );
             }
+            // This branch runs only when WP_Filesystem is unavailable (we fell back
+            // to direct file_put_contents above). Apply WP's standard file mode
+            // to keep ownership/permissions consistent with media uploads. No
+            // WP_Filesystem chmod equivalent is reliably available in this
+            // fallback path.
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_chmod
             @chmod( $path, FS_CHMOD_FILE );
             return true;
         }

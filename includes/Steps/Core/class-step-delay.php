@@ -57,7 +57,7 @@ class FMW_Step_Delay extends FMW_Step_Base {
         if ( $seconds < 1 || $seconds > 3600 ) {
             throw new FMW_Step_Exception(
                 'config_error',
-                "delay: 'seconds' must be between 1 and 3600. Got: {$seconds}"
+                sprintf( "delay: 'seconds' must be between 1 and 3600. Got: %d", (int) $seconds )
             );
         }
 

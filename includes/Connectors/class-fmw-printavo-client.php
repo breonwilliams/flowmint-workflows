@@ -61,7 +61,7 @@ class FMW_Printavo_Client {
         if ( is_wp_error( $raw ) ) {
             throw new FMW_Step_Exception(
                 'credential_unreadable',
-                'Printavo credential is stored but could not be decrypted: ' . $raw->get_error_message()
+                'Printavo credential is stored but could not be decrypted: ' . esc_html( $raw->get_error_message() )
             );
         }
 
@@ -145,14 +145,14 @@ class FMW_Printavo_Client {
         if ( $status >= 500 ) {
             throw new FMW_Step_Exception(
                 'external_5xx',
-                "Printavo returned {$status}. " . self::body_excerpt( $body )
+                sprintf( 'Printavo returned %d. %s', (int) $status, esc_html( self::body_excerpt( $body ) ) )
             );
         }
 
         if ( $status >= 400 ) {
             throw new FMW_Step_Exception(
                 'external_4xx',
-                "Printavo returned {$status}. " . self::body_excerpt( $body )
+                sprintf( 'Printavo returned %d. %s', (int) $status, esc_html( self::body_excerpt( $body ) ) )
             );
         }
 
@@ -160,7 +160,7 @@ class FMW_Printavo_Client {
         if ( ! is_array( $body ) ) {
             throw new FMW_Step_Exception(
                 'unexpected',
-                'Printavo returned non-JSON body: ' . self::body_excerpt( $body )
+                'Printavo returned non-JSON body: ' . esc_html( self::body_excerpt( $body ) )
             );
         }
 
@@ -171,7 +171,11 @@ class FMW_Printavo_Client {
             );
             throw new FMW_Step_Exception(
                 'external_4xx',
-                'Printavo GraphQL errors: ' . implode( '; ', $messages ),
+                'Printavo GraphQL errors: ' . esc_html( implode( '; ', $messages ) ),
+                // GraphQL errors array is structured data used by catch handlers for
+                // diagnostics — never echoed directly. esc_html() doesn't apply to
+                // arrays; consumers that surface specific fields must escape on display.
+                // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
                 [ 'errors' => $body['errors'] ]
             );
         }

@@ -66,7 +66,11 @@ class FMW_Workflow_Executor {
             if ( ! $class ) {
                 throw new FMW_Step_Exception(
                     'config_error',
-                    "Step '{$step_name}' references unknown type '{$step_type}'. Workflow JSON is invalid."
+                    sprintf(
+                        "Step '%s' references unknown type '%s'. Workflow JSON is invalid.",
+                        esc_html( $step_name ),
+                        esc_html( $step_type )
+                    )
                 );
             }
 

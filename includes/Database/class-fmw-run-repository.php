@@ -25,10 +25,12 @@ class FMW_Run_Repository {
     public static function get( $id ) {
         global $wpdb;
 
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- self::table() returns a $wpdb->prefix-derived table name (plugin-controlled); $id flows through %d.
         $row = $wpdb->get_row(
             $wpdb->prepare( 'SELECT * FROM ' . self::table() . ' WHERE id = %d', (int) $id ),
             ARRAY_A
         );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
         return $row ?: null;
     }
@@ -84,6 +86,7 @@ class FMW_Run_Repository {
         $where_sql = implode( ' AND ', $where );
         $offset    = max( 0, ( $args['page'] - 1 ) * $args['per_page'] );
 
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- self::table() is a plugin-controlled table name; $where_sql is composed from a fixed allow-list of column predicates above using %s/%d placeholders; user values flow through $params via prepare().
         $sql = 'SELECT * FROM ' . self::table() . ' WHERE ' . $where_sql . ' ORDER BY id DESC LIMIT %d OFFSET %d';
         $items = $wpdb->get_results(
             $params
@@ -96,6 +99,7 @@ class FMW_Run_Repository {
         $total = (int) $wpdb->get_var(
             $params ? $wpdb->prepare( $count_sql, $params ) : $count_sql
         );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
         return [
             'items' => $items ?: [],
@@ -213,10 +217,12 @@ class FMW_Run_Repository {
     public static function increment_retry_count( $run_id ) {
         global $wpdb;
 
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- self::table() returns a $wpdb->prefix-derived table name (plugin-controlled); $run_id flows through %d.
         $result = $wpdb->query( $wpdb->prepare(
             'UPDATE ' . self::table() . ' SET retry_count = retry_count + 1 WHERE id = %d',
             (int) $run_id
         ) );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
         return $result !== false;
     }

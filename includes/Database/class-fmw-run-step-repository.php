@@ -31,6 +31,7 @@ class FMW_Run_Step_Repository {
     public static function list_for_run( $run_id ) {
         global $wpdb;
 
+        // phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- self::table() returns a $wpdb->prefix-derived table name (plugin-controlled, never user input); $run_id flows through %d.
         $rows = $wpdb->get_results(
             $wpdb->prepare(
                 'SELECT * FROM ' . self::table() . ' WHERE run_id = %d ORDER BY step_index ASC',
@@ -38,6 +39,7 @@ class FMW_Run_Step_Repository {
             ),
             ARRAY_A
         );
+        // phpcs:enable WordPress.DB.PreparedSQL.NotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
         return $rows ?: [];
     }

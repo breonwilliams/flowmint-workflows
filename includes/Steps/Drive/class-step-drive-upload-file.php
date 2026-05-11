@@ -97,7 +97,7 @@ class FMW_Step_Drive_Upload_File extends FMW_Step_Base {
         if ( ! file_exists( $absolute_path ) ) {
             throw new FMW_Step_Exception(
                 'file_not_found',
-                "drive_upload_file: file not found on disk: {$absolute_path}"
+                sprintf( 'drive_upload_file: file not found on disk: %s', esc_html( $absolute_path ) )
             );
         }
 

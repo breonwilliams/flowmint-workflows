@@ -38,7 +38,7 @@ class FMW_Admin_Runs {
         echo '<option value="">' . esc_html__( 'All statuses', 'flowmint-workflows' ) . '</option>';
         foreach ( [ 'queued', 'running', 'completed', 'failed', 'cancelled' ] as $s ) {
             $selected = $status_filter === $s ? 'selected' : '';
-            echo "<option value=\"{$s}\" {$selected}>" . esc_html( ucfirst( $s ) ) . '</option>';
+            echo '<option value="' . esc_attr( $s ) . '" ' . esc_attr( $selected ) . '>' . esc_html( ucfirst( $s ) ) . '</option>';
         }
         echo '</select> ';
         echo '<input type="text" name="workflow_id" placeholder="Workflow ID" value="' . esc_attr( $workflow_filter ?? '' ) . '" /> ';
@@ -81,12 +81,14 @@ class FMW_Admin_Runs {
         $total_pages = (int) ceil( $list['total'] / $args['per_page'] );
         if ( $total_pages > 1 ) {
             echo '<div class="tablenav"><div class="tablenav-pages">';
-            echo paginate_links( [
+            // paginate_links() returns pre-escaped HTML; wp_kses_post() keeps Plugin Check
+            // satisfied without altering the rendered output.
+            echo wp_kses_post( paginate_links( [
                 'base'      => add_query_arg( 'paged', '%#%' ),
                 'format'    => '',
                 'current'   => $page,
                 'total'     => $total_pages,
-            ] );
+            ] ) );
             echo '</div></div>';
         }
 

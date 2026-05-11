@@ -89,7 +89,7 @@ class FMW_Http_Client {
             $message = $response->get_error_message();
             // Network errors (DNS, timeout, etc.)
             $code = strpos( $message, 'timed out' ) !== false ? 'timeout' : 'network_error';
-            throw new FMW_Step_Exception( $code, "HTTP request failed: {$message}" );
+            throw new FMW_Step_Exception( esc_html( $code ), sprintf( 'HTTP request failed: %s', esc_html( $message ) ) );
         }
 
         $status        = (int) wp_remote_retrieve_response_code( $response );
@@ -117,9 +117,15 @@ class FMW_Http_Client {
             $code = self::error_code_for_status( $status );
             $excerpt = is_string( $resp_body_raw ) ? substr( $resp_body_raw, 0, 200 ) : '';
             throw new FMW_Step_Exception(
-                $code,
-                "HTTP {$method} {$url} returned {$status}. Body excerpt: {$excerpt}",
-                [ 'status' => $status, 'response_excerpt' => $excerpt ]
+                esc_html( $code ),
+                sprintf(
+                    'HTTP %s %s returned %d. Body excerpt: %s',
+                    esc_html( $method ),
+                    esc_html( $url ),
+                    (int) $status,
+                    esc_html( $excerpt )
+                ),
+                [ 'status' => (int) $status, 'response_excerpt' => esc_html( $excerpt ) ]
             );
         }
 

@@ -95,7 +95,7 @@ class FMW_Email_Client {
             $message = $captured_error ? $captured_error->get_error_message() : 'wp_mail returned false';
             throw new FMW_Step_Exception(
                 'email_send_failed',
-                "Failed to send email: {$message}"
+                sprintf( 'Failed to send email: %s', esc_html( $message ) )
             );
         }
 
