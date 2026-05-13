@@ -4,7 +4,7 @@ Tags: workflow, automation, form submissions, async, action scheduler
 Requires at least: 5.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 0.5.0
+Stable tag: 0.6.0-rc1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,15 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 
 == Changelog ==
 
+= 0.6.0-rc1 — 2026-05-13 =
+* **New: Scheduled workflow triggers.** Workflows can now fire on a recurring schedule (`hourly` / `twicedaily` / `daily` / `weekly`) in addition to form submissions. Two trigger types in v0.6: `{ type: "form", form_id: "…" }` (existing pattern, explicit) and `{ type: "schedule", interval: "…", hour: …, minute: …, day_of_week: … }` (new). Existing form-triggered workflows are normalized into the new shape transparently; no JSON changes required.
+* **New step types:** `fre_list_entries` (query FE entries by form, status, and age) and `fre_delete_entries` (bulk-delete, idempotent, per-id failure tolerant). Designed for retention workflows — typical chain is `fre_list_entries → fre_delete_entries → log_info`.
+* **New class:** `FMW_Schedule_Listener` — registers Action Scheduler recurring events on workflow save/enable, unschedules on disable/delete, handles tick dispatch through to the existing executor.
+* **New database column:** `wp_fmw_workflows.trigger_type VARCHAR(32) DEFAULT 'form'` plus index `idx_trigger_type (trigger_type, enabled)`. Existing `form_id` column made nullable. Migration is additive and idempotent.
+* **New REST surface:** `/preflight` reports `supported_trigger_types: ["form", "schedule"]`; `/workflows` accepts a `trigger_type` filter; create/update accept the new `trigger` block at the wrapper level or inside the config JSON.
+* **Daily reconciliation:** an `fmw_reconcile_scheduled_events` AS recurring action reconciles AS events with the workflows table, providing drift correction for the rare case where an event was lost.
+* Full design contract: `docs/DESIGN_SCHEDULED_TRIGGERS.md`. User guide: `docs/SCHEDULED_WORKFLOWS.md`.
+
 = 0.5.0 — 2026-05-10 =
 * New: Claude Cowork MCP connector. Workflows can now be created, inspected, and replayed from Claude Desktop via the `FlowMint Workflows → Claude Connection` admin page. Includes 16 MCP tools mapping 1:1 to the existing REST endpoints.
 * New: Two-gate security model — connector defaults to disabled site-wide; admin opts in via the kill-switch toggle.
@@ -78,6 +87,9 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 * Phase 1: Core engine, DB schema, base step types, submission listener.
 
 == Upgrade Notice ==
+
+= 0.6.0-rc1 =
+Adds scheduled workflow triggers (hourly / daily / weekly / twicedaily) and two new step types for bulk-querying and deleting FormEngine entries. Database schema bumps to v0.2.0 via additive ALTER (nullable form_id + new trigger_type column with index). Migration runs automatically on the first plugin load and is idempotent. Existing form-triggered workflows are unaffected — they're normalized into the new trigger-block shape transparently. Rolling back to v0.5.0 does NOT require dropping the new column; the older code simply ignores it.
 
 = 0.5.0 =
 Adds the Claude Cowork MCP connector and full Plugin Check compliance pass. No behavior changes for existing workflows.

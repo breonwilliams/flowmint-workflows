@@ -139,6 +139,42 @@ class FMW_Run_Repository {
     }
 
     /**
+     * Insert a new scheduled-run row in `queued` state.
+     *
+     * Scheduled runs have no FE form binding (workflow.form_id is NULL)
+     * and no entry. Per docs/DESIGN_SCHEDULED_TRIGGERS.md §5.2 we use the
+     * sentinel values:
+     *   - form_id  = ''  (NOT NULL column; empty string distinguishes
+     *                     "scheduled run, no form" from any real form_id)
+     *   - entry_id = 0   (NOT NULL UNSIGNED; the existing column type;
+     *                     no real entry will ever have id 0)
+     *
+     * @param string $workflow_id
+     * @return int|WP_Error New run ID, or WP_Error on insert failure.
+     */
+    public static function create_pending_scheduled( $workflow_id ) {
+        global $wpdb;
+
+        $row = [
+            'workflow_id'   => $workflow_id,
+            'form_id'       => '',
+            'entry_id'      => 0,
+            'status'        => 'queued',
+            'retry_count'   => 0,
+            'parent_run_id' => null,
+            'created_at'    => current_time( 'mysql' ),
+        ];
+
+        $result = $wpdb->insert( self::table(), $row );
+
+        if ( $result === false ) {
+            return new WP_Error( 'db_error', 'Failed to insert scheduled run: ' . $wpdb->last_error );
+        }
+
+        return (int) $wpdb->insert_id;
+    }
+
+    /**
      * Update a run's status and timing.
      *
      * @param int    $run_id

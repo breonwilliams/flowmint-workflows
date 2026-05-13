@@ -6,6 +6,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.0-rc1] — 2026-05-13
+
+### Added — Scheduled workflow triggers
+
+Workflows can now be triggered on a recurring schedule (hourly / twice-daily / daily / weekly) in addition to form submissions. Closes the "Scheduled workflows" item that was explicitly deferred to v2+ in `docs/ROADMAP.md` — the architecture left room for it, and v0.6.0 cashes that in. Full design contract: `docs/DESIGN_SCHEDULED_TRIGGERS.md`. User-facing guide: `docs/SCHEDULED_WORKFLOWS.md`.
+
+**New trigger abstraction.**
+- Workflow JSON gains a `trigger` block. Two trigger types in v0.6: `{ type: "form", form_id: "…" }` (form-triggered, the existing pattern made explicit) and `{ type: "schedule", interval: "…", hour: …, minute: …, day_of_week: … }` (scheduled, new).
+- Legacy workflows that have just a top-level `form_id` continue to work — the validator normalizes them into the v0.6 shape transparently. Existing workflows on production sites do NOT need their JSON rewritten.
+- The REST API accepts the new `trigger` block at the wrapper level for convenience (alongside `id`, `title`, `config`), or inside the config JSON. Preflight reports `supported_trigger_types: ["form", "schedule"]` so MCP clients can introspect capabilities.
+
+**New step types (FormEngine category).**
+- `fre_list_entries` — Query FE entries by form, status, and/or age. Backed by `FRE_Entry_Query` (FRE 1.6.0+). Hard cap of 1000 rows per call. Returns oldest-first. Output includes a `hit_limit` flag so the next tick can pick up the overflow.
+- `fre_delete_entries` — Bulk-delete by ID list (accepts entry objects from `fre_list_entries` OR bare integer IDs). **Idempotent** — re-running on already-deleted IDs returns `already_gone` rather than erroring. **Per-id failure tolerance** — one bad entry doesn't sink the batch; failures land in a `failed` array.
+
+**Database schema (v0.2.0 migration).**
+- `wp_fmw_workflows.form_id` is now NULLABLE (scheduled workflows have no bound form).
+- New `wp_fmw_workflows.trigger_type` column (VARCHAR(32) NOT NULL DEFAULT 'form') indexed via new composite key `idx_trigger_type (trigger_type, enabled)` for efficient "find all enabled scheduled workflows" lookups by `FMW_Schedule_Listener`.
+- Migration is additive, idempotent, and probes column / index state via `SHOW COLUMNS` / `SHOW INDEX` before each ALTER. Existing rows are correctly classified as `trigger_type = 'form'` by the column default. Rollback to v0.5.0 does NOT require dropping the new column — the older code simply ignores it.
+
+**New class: `FMW_Schedule_Listener`** (`includes/Core/class-fmw-schedule-listener.php`).
+- Mirrors `FMW_Submission_Listener` but for the scheduled trigger path.
+- Subscribes to `fmw_workflow_saved` / `fmw_workflow_disabled` / `fmw_workflow_deleted` (newly fired by the repository) — registers an Action Scheduler recurring event when a scheduled workflow is saved + enabled, unregisters when it's disabled or deleted.
+- Tick handler creates a queued run via `FMW_Run_Repository::create_pending_scheduled` (`form_id = ''`, `entry_id = 0` sentinels per design §5.2), then enqueues `fmw_run_workflow` async action — same downstream path as form submissions.
+- Timezone-aware first-tick computation: `daily` and `weekly` intervals use site-local time (`wp_timezone()`), matching how `Settings → General` displays "site timezone."
+
+**Daily reconciliation pass.**
+- New AS recurring action `fmw_reconcile_scheduled_events` fires daily and reconciles AS recurring events with the workflows table. Drift correction: even if an AS action was lost or wiped, the next reconciliation rebuilds it.
+- Bootstrap is self-healing: on the first plugins_loaded after v0.6.0 lands, schedules the daily reconciliation AND runs an immediate pass so any pre-existing scheduled workflows get their cron events without a 24h wait. Hooked on `init` priority 20 (after AS's data store initialization at `init` priority 1).
+
+**Validator additions.**
+- `FMW_Workflow_Validator::normalize()` — public static method that converts legacy → v0.6 shape on a copy. Idempotent.
+- `trigger` block validation: enum-checked `type` ('form' | 'schedule'), enum-checked `interval` ('hourly' | 'twicedaily' | 'daily' | 'weekly'), range-checked `hour` (0–23), `minute` (0–59), `day_of_week` (1–7 ISO-8601).
+- New warning (not error) for scheduled workflows that interpolate `{{ data.* }}` / `{{ entry.* }}` / `{{ entry_files.* }}` — scheduled runs have no FE entry context, so those references silently resolve to empty string at runtime; the warning surfaces the typo at save time.
+
+**Job handler.**
+- `FMW_Workflow_Job::build_context()` recognizes the scheduled-run sentinel (`entry_id === 0`) and skips the FE entry fetch entirely. The context's `entry`, `data`, `entry_files` stay empty arrays; the interpolator already handles missing variables by returning empty string, so existing step implementations continue to work unchanged.
+
+**Repository.**
+- `FMW_Workflow_Repository::create` / `update` now normalize config and persist `trigger_type` column, allow NULL `form_id` for scheduled workflows.
+- New `FMW_Workflow_Repository::get_all_by_trigger_type($type, $args)` for the listener's reconciliation pass.
+- `get_for_form()` tightened with explicit `trigger_type = 'form'` filter — a misconfigured scheduled workflow that somehow has a non-NULL `form_id` can never be picked up by the FRE submission listener as if it were form-triggered.
+- Repository now fires `fmw_workflow_saved` (on create + update), `fmw_workflow_disabled` (on enabled 1→0 transition), and `fmw_workflow_deleted` (on delete) actions.
+
+**REST.**
+- `/workflows` list endpoint accepts a `trigger_type` query parameter.
+- `/preflight` reports `supported_trigger_types`.
+- All other endpoints accept the new `trigger` block in request bodies and return it in responses. Backwards-compat for legacy `form_id` at the wrapper level: still works, still normalized to `trigger.type = "form"` internally.
+
+**Verification (local Flywheel site).**
+99 of 99 smoke checks green across three layered test suites:
+- Phase 1 (32 checks) — schema migration, value-object accessors, validator normalization + trigger validation, repository scheduled + legacy create/retrieve, lifecycle hooks fire correctly, schedule listener stub is a no-op.
+- Phase 2 (32 checks) — listener wiring, AS event registration on save/update/disable/delete, end-to-end tick → run completes synchronously, reconciliation drift correction, form-triggered regression unaffected.
+- Phase 3 (35 checks) — both new step types registered with correct metadata, every documented filter combination on `fre_list_entries`, idempotency + mixed-input tolerance on `fre_delete_entries`, end-to-end retention workflow scenario with the actual 725 use case JSON.
+
+**Plugin version stamp:** This is `0.6.0-rc1` — a release candidate for the 725 Print Lab production verification. The stamp moves to clean `0.6.0` after 725 confirms healthy operation. See `RELEASE.md` for the release procedure.
+
 ## [0.5.0] — 2026-05-10
 
 ### Added — Claude Cowork MCP connector

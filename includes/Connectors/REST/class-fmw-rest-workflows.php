@@ -20,11 +20,15 @@ class FMW_REST_Workflows {
                 'callback'            => [ $this, 'list' ],
                 'permission_callback' => [ 'FMW_REST_Auth', 'require_manage' ],
                 'args'                => [
-                    'form_id'    => [ 'type' => 'string' ],
-                    'enabled'    => [ 'type' => 'boolean' ],
-                    'managed_by' => [ 'type' => 'string' ],
-                    'page'       => [ 'type' => 'integer', 'default' => 1, 'minimum' => 1 ],
-                    'per_page'   => [ 'type' => 'integer', 'default' => 20, 'minimum' => 1, 'maximum' => 100 ],
+                    'form_id'      => [ 'type' => 'string' ],
+                    'trigger_type' => [
+                        'type' => 'string',
+                        'enum' => [ 'form', 'schedule' ],
+                    ],
+                    'enabled'      => [ 'type' => 'boolean' ],
+                    'managed_by'   => [ 'type' => 'string' ],
+                    'page'         => [ 'type' => 'integer', 'default' => 1, 'minimum' => 1 ],
+                    'per_page'     => [ 'type' => 'integer', 'default' => 20, 'minimum' => 1, 'maximum' => 100 ],
                 ],
             ],
             [
@@ -64,11 +68,12 @@ class FMW_REST_Workflows {
 
     public function list( $request ) {
         $args = [
-            'form_id'    => $request->get_param( 'form_id' ),
-            'enabled'    => $request->get_param( 'enabled' ),
-            'managed_by' => $request->get_param( 'managed_by' ),
-            'page'       => (int) $request->get_param( 'page' ),
-            'per_page'   => (int) $request->get_param( 'per_page' ),
+            'form_id'      => $request->get_param( 'form_id' ),
+            'trigger_type' => $request->get_param( 'trigger_type' ),
+            'enabled'      => $request->get_param( 'enabled' ),
+            'managed_by'   => $request->get_param( 'managed_by' ),
+            'page'         => (int) $request->get_param( 'page' ),
+            'per_page'     => (int) $request->get_param( 'per_page' ),
         ];
 
         $result = FMW_Workflow_Repository::list( $args );

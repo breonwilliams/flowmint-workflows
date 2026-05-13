@@ -364,7 +364,7 @@ A workflow definition's `config` field is JSON of this shape:
 
 Schema rules:
 - `version` is the workflow JSON schema version. Currently `1.0`. Used for forward compatibility.
-- `form_id` must match an existing FormEngine form ID at create-time (validated by calling FRE's registry).
+- `form_id` (legacy v0.5 shape) must match an existing FormEngine form ID at create-time (validated by calling FRE's registry). In v0.6+, this field is normalized into the new `trigger` block automatically — see "Trigger types" below.
 - `settings.max_retries`, `settings.retry_delay_seconds`, `settings.timeout_seconds` are workflow-level defaults. Individual steps can override.
 - `settings.on_failure_notify` is a list of notification channels. Possible values: `slack`, `email`, `none`.
 - `steps[].name` is unique within the workflow and is how downstream steps reference outputs (`{{ steps.<name>.<output_field> }}`).
@@ -372,6 +372,52 @@ Schema rules:
 - `steps[].config` is the step's configuration. Schema is per-step-type; documented in `STEP_LIBRARY.md`.
 - `steps[].on_error` is `fail` (default — fail the run), `continue` (log error, skip this step's outputs, continue), or `retry` (use Action Scheduler retry).
 - `steps[].skip_if` is a conditional expression. If it evaluates truthy, the step is skipped (status `skipped`).
+
+## Trigger types (v0.6.0+)
+
+A workflow's `trigger` block declares what causes the workflow to fire. Two trigger types exist in v0.6:
+
+```json
+// Form-triggered (default; pre-v0.6 workflows are normalized into this shape)
+{
+  "trigger": { "type": "form", "form_id": "bulk-order-quote" }
+}
+
+// Schedule-triggered
+{
+  "trigger": {
+    "type": "schedule",
+    "interval": "daily",     // hourly | twicedaily | daily | weekly
+    "hour": 2,               // 0–23 (for daily / weekly)
+    "minute": 0,             // 0–59 (for daily / weekly)
+    "day_of_week": 1         // 1–7, ISO-8601 Mon–Sun (for weekly)
+  }
+}
+```
+
+**Backwards compatibility.** Pre-v0.6 workflows whose JSON has a top-level `form_id` but no `trigger` block are silently normalized into `trigger: { type: "form", form_id }` at validation and persistence time. Existing rows on production sites are never auto-rewritten — they keep their legacy JSON until something else updates them.
+
+**Denormalization.** The `wp_fmw_workflows.trigger_type` column is the indexed projection of `config.trigger.type`. The `FMW_Schedule_Listener` queries this column directly to find every enabled scheduled workflow during its daily reconciliation pass, without parsing every config JSON.
+
+**Schedule-triggered execution path** mirrors the form-triggered path:
+
+```
+Action Scheduler recurring event fires
+  → FMW_Schedule_Listener::on_scheduled_tick($workflow_id)
+    → FMW_Run_Repository::create_pending_scheduled()       (sentinel: form_id='', entry_id=0)
+    → as_enqueue_async_action('fmw_run_workflow', [$run_id])
+      → FMW_Workflow_Job::run($run_id)                     ← same job handler as form triggers
+        → FMW_Workflow_Executor                            ← same executor
+          → steps[]
+```
+
+The executor and downstream code are unchanged. The only new path is the listener that creates the run record. Scheduled runs share `wp_fmw_workflow_runs`, the same retry policy, the same logging — they just have a different origin.
+
+**Context for scheduled runs.** Scheduled runs have no FormEngine entry. The job handler recognizes `entry_id === 0` and skips the FE entry fetch, leaving `context.entry`, `context.data`, and `context.entry_files` as empty arrays. The interpolator silently resolves missing variables to empty string, so existing step implementations continue to work — but workflow authors should reference `vars.*`, `env.*`, or previous-step outputs (`steps.*`) rather than `data.*` / `entry.*` in scheduled workflows. The validator emits a warning at save time when a scheduled workflow's step configs reference entry-bound variables.
+
+**Reconciliation.** Per-workflow AS recurring events are registered when a workflow is saved (`fmw_workflow_saved` action), unregistered when it's disabled (`fmw_workflow_disabled`) or deleted (`fmw_workflow_deleted`). A daily `fmw_reconcile_scheduled_events` AS action sweeps the workflows table and brings AS state into sync with the DB — drift correction for the rare case where an event was lost or wiped.
+
+See `DESIGN_SCHEDULED_TRIGGERS.md` for the full engineering contract, `SCHEDULED_WORKFLOWS.md` for the user-facing guide.
 
 ## Variable interpolation syntax
 

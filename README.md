@@ -2,18 +2,21 @@
 
 Async workflow runtime for WordPress. Companion to [Form Runtime Engine](../form-runtime-engine).
 
-**Status:** Pre-release (planning phase). See `docs/ROADMAP.md` for the build plan.
+**Status:** v0.6.0-rc1 — scheduled triggers landing. See `CHANGELOG.md` for the release notes and `docs/ROADMAP.md` for the longer-term build plan.
 
 ## What it does
 
-Listens to FormEngine form submissions and runs configurable multi-step pipelines:
+Triggered by either a FormEngine submission OR a recurring schedule (hourly / twicedaily / daily / weekly), runs configurable multi-step pipelines:
 
 - Upload files to Google Drive
 - Create Printavo Quotes / Invoices
 - Send customer acknowledgment emails
 - Hit external APIs (HTTP/webhooks)
+- Bulk-query and delete FormEngine entries (retention sweeps — new in v0.6.0)
 - Conditional branching, retries, error handling
 - All async via Action Scheduler
+
+See `docs/SCHEDULED_WORKFLOWS.md` for the scheduled-trigger guide.
 
 Workflow definitions are JSON, stored in the WordPress database, created via REST API or MCP tools. No client-facing UI — operated by the FlowMint team.
 

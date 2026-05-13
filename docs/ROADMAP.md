@@ -42,10 +42,20 @@ Result: new client workflows take 1-2 hours instead of 24+. No recurring Zapier 
 - **Branching / parallel execution.** v1 supports linear step sequences with conditionals. `for_each` and `parallel` step types are deferred to v2.
 - **Custom step types created by clients.** v1's step library is fixed. Adding new step types requires a code change to the plugin (Phase 1+ effort each).
 - **Sub-workflows / workflow composition.** A workflow cannot invoke another workflow in v1.
-- **Scheduled workflows (cron-style triggers).** Only form submissions trigger workflows in v1.
+- ~~**Scheduled workflows (cron-style triggers).** Only form submissions trigger workflows in v1.~~ **Delivered in v0.6.0** — see `DESIGN_SCHEDULED_TRIGGERS.md` for the engineering contract and `SCHEDULED_WORKFLOWS.md` for the user guide.
 - **Approval steps (workflow waits for human input).** Out of scope.
 
 These deferred features can be added in v2+ as need arises. The architecture leaves room for them but doesn't pay the complexity cost upfront.
+
+## Delivered after the initial v1.0 plan
+
+### v0.6.0 — Scheduled workflow triggers (2026-05-13)
+
+The 725 Print Lab production deployment surfaced a use case the v1.0 ROADMAP had explicitly deferred: a daily workflow to purge old FRE entries from the WordPress database. Rather than hardcode a one-off "retention" feature, v0.6.0 delivers the proper underlying capability — workflows can now be triggered on a recurring schedule (hourly / twice-daily / daily / weekly), reusable by any future client who needs periodic syncs, scheduled reports, or maintenance jobs. The retention workflow is just the first consumer.
+
+Adds two FormEngine step types — `fre_list_entries` and `fre_delete_entries` — and a parallel trigger path (`Action Scheduler recurring event → FMW_Schedule_Listener → executor`) that shares the existing executor, run history, and retry policy. Form-triggered workflows are completely unaffected.
+
+Documentation: `docs/DESIGN_SCHEDULED_TRIGGERS.md` (engineering contract), `docs/SCHEDULED_WORKFLOWS.md` (user guide).
 
 ## Success criteria for v1.0
 

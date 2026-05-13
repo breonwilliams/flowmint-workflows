@@ -49,6 +49,11 @@ class FMW_REST_Preflight {
             'user_capabilities'      => [
                 'fmw_manage'       => current_user_can( 'manage_options' ),
             ],
+            // Trigger types this install can execute. MCP clients use
+            // this to decide whether to surface the "scheduled workflow"
+            // affordance to the user. Pre-v0.6.0 installs report just
+            // ['form']; v0.6.0+ reports both.
+            'supported_trigger_types' => [ 'form', 'schedule' ],
             'schema_document_url' => FMW_PLUGIN_URL . 'docs/CONNECTOR_API.md',
             'diagnostics' => [
                 'stored_plugin_version' => get_option( 'fmw_db_version', '0.0.0' ),

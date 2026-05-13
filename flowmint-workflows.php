@@ -2,8 +2,8 @@
 /**
  * Plugin Name: FlowMint Workflows
  * Plugin URI: https://flowmint.dev
- * Description: Async workflow runtime that orchestrates form submissions through configurable pipelines (Drive, Printavo, Email, HTTP, etc.). Companion plugin to Form Runtime Engine.
- * Version: 0.5.0
+ * Description: Async workflow runtime that orchestrates form submissions and recurring schedules through configurable pipelines (Drive, Printavo, Email, HTTP, FE retention, etc.). Companion plugin to Form Runtime Engine.
+ * Version: 0.6.0-rc1
  * Requires at least: 5.0
  * Requires PHP: 7.4
  * Author: FlowMint
@@ -22,10 +22,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin version.
-define( 'FMW_VERSION', '0.5.0' );
+//
+// 0.6.0-rc1 — release candidate for 725 production verification.
+// Bumps to clean 0.6.0 after 725 runs the daily retention sweep
+// cleanly for several days and the existing Bulk/Small/Contact
+// workflows continue running normally.
+define( 'FMW_VERSION', '0.6.0-rc1' );
 
 // Database schema version. Bump when DDL changes; triggers migration.
-define( 'FMW_DB_VERSION', '0.1.0' );
+//
+// 0.2.0 (v0.6.0 dev) — Scheduled triggers. Adds trigger_type column to
+// wp_fmw_workflows, makes form_id nullable, adds idx_trigger_type index.
+// See FMW_Schema::migrate_to_0_2_0() for the migration logic.
+define( 'FMW_DB_VERSION', '0.2.0' );
 
 // Plugin paths and URLs.
 define( 'FMW_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -96,6 +105,18 @@ final class FlowMint_Workflows {
     public $listener;
 
     /**
+     * Schedule listener instance.
+     *
+     * Phase 1 ships only the wiring + stub; Phase 2 fills in cron
+     * registration and tick handling. The property exists from Phase 1
+     * onward so callers can introspect `fmw()->schedule_listener` at
+     * any point in the v0.6.x cycle.
+     *
+     * @var FMW_Schedule_Listener|null
+     */
+    public $schedule_listener;
+
+    /**
      * Get singleton instance.
      *
      * @return FlowMint_Workflows
@@ -153,12 +174,91 @@ final class FlowMint_Workflows {
         $this->maybe_run_db_migration();
         $this->init_components();
 
+        // Reconciliation bootstrap is deferred to `init` priority 20.
+        // Action Scheduler's data store doesn't initialize until `init`
+        // priority 1; calling as_schedule_recurring_action earlier than
+        // that emits a "called incorrectly" PHP notice AND silently
+        // does nothing. Running at init priority 20 gives AS time to
+        // finish setup.
+        add_action( 'init', [ $this, 'maybe_schedule_reconciliation' ], 20 );
+
         /**
          * Fires after FlowMint Workflows is fully initialized.
          *
          * @param FlowMint_Workflows $plugin The plugin instance.
          */
         do_action( 'fmw_init', $this );
+    }
+
+    /**
+     * Bootstrap the schedule listener's daily reconciliation.
+     *
+     * Hooked on `init` priority 20 — after Action Scheduler's data
+     * store is initialized (init priority 1).
+     *
+     * Self-healing: even when the `fmw_reconciliation_bootstrapped`
+     * option is set, we double-check that the daily AS recurring
+     * action actually exists. If it doesn't (e.g., AS data was
+     * wiped, OR a prior bootstrap attempt set the option but the
+     * AS call no-op'd because of a timing issue), we re-schedule.
+     *
+     * Three things this guarantees on first call:
+     *
+     *   1. The daily `fmw_reconcile_scheduled_events` AS recurring
+     *      action exists. From day 2 onward it self-maintains the
+     *      cron events for every scheduled workflow.
+     *
+     *   2. Reconciliation runs IMMEDIATELY so existing scheduled
+     *      workflows (e.g., created on a fresh v0.6.0 install
+     *      before the daily action fires) get their cron events
+     *      registered without a 24h wait.
+     *
+     *   3. The bootstrap flag is set so subsequent loads short-
+     *      circuit in the common (steady-state) case where both
+     *      the flag and the AS action are present.
+     *
+     * `public` so the `init` hook can invoke it.
+     */
+    public function maybe_schedule_reconciliation() {
+        if ( ! function_exists( 'as_schedule_recurring_action' ) ) {
+            return;
+        }
+
+        $bootstrapped = (bool) get_option( 'fmw_reconciliation_bootstrapped' );
+        $scheduled    = as_has_scheduled_action(
+            FMW_Schedule_Listener::RECONCILE_HOOK,
+            [],
+            FMW_Schedule_Listener::ACTION_GROUP
+        );
+
+        // Steady state — both the flag and the AS action are in place.
+        // No-op for every subsequent page load on a healthy install.
+        if ( $bootstrapped && $scheduled ) {
+            return;
+        }
+
+        // Either a fresh install OR a previously-failed bootstrap
+        // (e.g., the flag got set but the AS call was a no-op due to
+        // a timing issue). Schedule the daily action if it's missing.
+        if ( ! $scheduled ) {
+            as_schedule_recurring_action(
+                time() + HOUR_IN_SECONDS,
+                DAY_IN_SECONDS,
+                FMW_Schedule_Listener::RECONCILE_HOOK,
+                [],
+                FMW_Schedule_Listener::ACTION_GROUP
+            );
+        }
+
+        // Immediate reconciliation pass — only on the very first
+        // bootstrap. Catches workflows that existed before the
+        // listener was wired (e.g., Phase 1 → Phase 2 transition).
+        // Idempotent for subsequent calls, but no need to repeat.
+        if ( ! $bootstrapped && $this->schedule_listener instanceof FMW_Schedule_Listener ) {
+            $this->schedule_listener->ensure_recurring_events_registered();
+        }
+
+        update_option( 'fmw_reconciliation_bootstrapped', '1' );
     }
 
     /**
@@ -208,6 +308,14 @@ final class FlowMint_Workflows {
         // Submission listener — listens to fre_submission_complete.
         $this->listener = new FMW_Submission_Listener();
         $this->listener->init();
+
+        // Schedule listener — Phase 1 stub. Subscribes to
+        // fmw_workflow_saved/disabled/deleted and the AS tick action so
+        // Phase 2 only needs to fill in method bodies. In Phase 1 all
+        // handlers are no-ops; scheduled workflows can be created and
+        // persisted but won't actually fire on their schedule yet.
+        $this->schedule_listener = new FMW_Schedule_Listener();
+        $this->schedule_listener->init();
 
         // Workflow job handler — registers Action Scheduler hook.
         FMW_Workflow_Job::register();

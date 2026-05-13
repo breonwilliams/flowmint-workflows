@@ -54,6 +54,8 @@ node_modules
 tests
 bin/install-wp-tests.sh
 bin/build-release.sh
+bin/smoke-test-*.sh
+bin/smoke-test-*.php
 build
 release
 *.zip

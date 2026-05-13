@@ -87,6 +87,10 @@ class FMW_Step_Registry {
             'FMW_Step_Fre_Get_File',
             'FMW_Step_Fre_Update_Entry_Status',
             'FMW_Step_Fre_Delete_Entry',
+            // v0.6.0 — scheduled triggers: bulk query + bulk delete
+            // for retention workflows and other batch operations.
+            'FMW_Step_Fre_List_Entries',
+            'FMW_Step_Fre_Delete_Entries',
         ];
 
         foreach ( $core_steps as $class ) {

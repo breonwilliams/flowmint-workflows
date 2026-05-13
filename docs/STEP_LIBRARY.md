@@ -57,13 +57,13 @@ All steps register themselves via `FMW_Step_Registry::register(self::class)` dur
 |---|---|---|
 | Control flow | set_variable, conditional, try_catch, delay | 1 |
 | Logging | log_info, log_warning, log_error | 1 |
-| FormEngine integration | fre_get_entry, fre_get_file, fre_update_entry_status, fre_delete_entry | 1 |
-| Google Drive | drive_find_folder, drive_find_or_create_folder, drive_create_folder, drive_upload_file, drive_share_link | 2 |
+| FormEngine integration | fre_get_entry, fre_get_file, fre_update_entry_status, fre_delete_entry, **fre_list_entries**, **fre_delete_entries** | 1 / **v0.6** |
+| Google Drive | drive_find_folder, drive_find_or_create_folder, drive_create_folder, drive_upload_file, drive_create_text_file, drive_share_link | 2 |
 | Email | send_email, send_email_template | 2 |
 | Printavo | printavo_find_customer, printavo_create_customer, printavo_find_or_create_customer, printavo_create_quote | 3 |
 | HTTP | http_get, http_post, http_request | 3 |
 
-24 step types in v1.0.
+28 step types total. **v0.6** additions (`fre_list_entries`, `fre_delete_entries`) ship alongside the scheduled-trigger system documented in `SCHEDULED_WORKFLOWS.md` — typically chained as a daily retention sweep.
 
 ---
 
@@ -310,6 +310,110 @@ Cascade-deletes the FE entry and its files (mirrors what the v1.0 Zapier workflo
 **Output:** `{ "deleted": true, "entry_id": <id>, "files_deleted": <count> }`
 
 Idempotency: if the entry was already deleted (e.g., by a previous attempt of this same run), returns `{ "deleted": false, "already_gone": true }` instead of erroring.
+
+### `fre_list_entries` *(v0.6.0+)*
+
+Queries FormEngine entries by form, status, and/or age. Returns the matching list as `entries` plus a `count` — typically piped into `fre_delete_entries` for a retention workflow, but also useful for any "do something with a batch of entries" pattern.
+
+Backed by `FRE_Entry_Query` (FRE 1.6.0+), so filters compose naturally with FE's own admin behavior.
+
+**Side effects:** No (read-only).
+
+**Config:**
+```json
+{
+  "form_id": "bulk-order-quote",
+  "status": ["unread", "read"],
+  "older_than_days": 30,
+  "limit": 500
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `form_id` | string | no | Restrict to one FE form. Omit (or pass `"*"`) to query across all forms. |
+| `status` | string \| string[] | no | Restrict to entries with these statuses. Single string or array. |
+| `older_than_days` | int (≥1) | no | Restrict to entries whose `created_at` is on or before (today − N days), site-local. |
+| `older_than_date` | string (YYYY-MM-DD) | no | Explicit cutoff. **Wins over `older_than_days`** when both are set (precedence is documented; not a hidden error). |
+| `limit` | int | no | Max entries to return. Default 100, hard cap 1000 (caller-supplied values above 1000 are floored). |
+
+**Output:**
+```json
+{
+  "entries": [
+    {"id": 38, "form_id": "small-order-request", "status": "unread", "created_at": "2026-04-01 12:34:56"},
+    {"id": 32, "form_id": "bulk-order-quote", "status": "read",   "created_at": "2026-04-02 08:12:00"}
+  ],
+  "count": 42,
+  "limit": 500,
+  "hit_limit": false
+}
+```
+
+- Entries are returned **oldest first** (`created_at ASC`) — retention sweeps consistently process the oldest data first.
+- `hit_limit: true` means there may be more matching entries that this run did not return. The next scheduled tick will pick them up.
+- Empty result (`count: 0`) is the normal "nothing to do" state, **not** an error. Downstream steps should handle it idempotently (`fre_delete_entries` does).
+
+**Example — find FORM_A entries older than 30 days:**
+```json
+{
+  "name": "find_old",
+  "type": "fre_list_entries",
+  "config": {
+    "form_id": "bulk-order-quote",
+    "older_than_days": 30,
+    "limit": 500
+  }
+}
+```
+
+### `fre_delete_entries` *(v0.6.0+)*
+
+Bulk-deletes FormEngine entries (and their attached files / meta) by iterating `FRE_Entry::delete()` per id. Designed for retention workflows — the typical chain is `fre_list_entries → fre_delete_entries`.
+
+**Side effects:** Yes (destructive).
+
+**Config:**
+```json
+{
+  "entries": "{{ steps.find_old.entries }}"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `entries` | array of entry objects OR array of integer ids | yes | Typical source: `{{ steps.<list_step>.entries }}`. Mixed input is allowed — entry objects, bare ids, and garbage values (which are silently dropped) can co-exist in the same array. |
+
+**Output:**
+```json
+{
+  "requested_count": 42,
+  "deleted_count": 38,
+  "already_gone_count": 4,
+  "failed_count": 0,
+  "deleted_ids": [1, 2, 3, ...],
+  "already_gone_ids": [99, 100, 101, 102],
+  "failed": [{"id": 17, "error": "..."}]
+}
+```
+
+**Idempotent.** Re-running on an already-deleted id returns `already_gone` for that id rather than erroring. This is correct semantics for retention sweeps that may race with manual admin deletes.
+
+**Per-id failure tolerance.** A single id's delete failure is recorded in the `failed` array; the step itself does NOT throw. The recommended `on_error` is `continue` so other steps after the purge (logging, notifications) still run even on partial failure.
+
+**Example — pair with `fre_list_entries`:**
+```json
+{
+  "name": "purge",
+  "type": "fre_delete_entries",
+  "on_error": "continue",
+  "config": {
+    "entries": "{{ steps.find_old.entries }}"
+  }
+}
+```
+
+See `SCHEDULED_WORKFLOWS.md` for the complete daily retention workflow example.
 
 ---
 

@@ -40,6 +40,7 @@ class FMW_Autoloader {
         'FMW_Expression'     => 'Core',
         'FMW_Logger'         => 'Core',
         'FMW_Submission'     => 'Core',
+        'FMW_Schedule'       => 'Core',
         // REST
         'FMW_REST'           => 'Connectors/REST',
         // MCP connector (Claude Desktop bridge — admin page + state class).

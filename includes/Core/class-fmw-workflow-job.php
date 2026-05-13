@@ -103,6 +103,18 @@ class FMW_Workflow_Job {
     /**
      * Build the workflow context for a run.
      *
+     * For form-triggered runs, loads the FormEngine entry and populates
+     * $context->data / $context->entry / $context->entry_files.
+     *
+     * For scheduled runs (entry_id === 0, per
+     * docs/DESIGN_SCHEDULED_TRIGGERS.md §5.2), skips the FE entry fetch
+     * entirely. The context's entry/data/entry_files stay empty arrays;
+     * the interpolator already handles missing variables by returning
+     * empty string, so existing step implementations that touch
+     * `{{ data.* }}` keep working — they just produce empty output.
+     * The validator emits a warning when scheduled workflows reference
+     * data/entry vars (see FMW_Workflow_Validator::check_for_entry_refs).
+     *
      * @param array $run DB row from wp_fmw_workflow_runs
      * @return FMW_Workflow_Context
      */
@@ -114,9 +126,14 @@ class FMW_Workflow_Job {
             $run['form_id']
         );
 
-        // Load FE entry.
+        // Scheduled run sentinel: entry_id === 0 means "no entry".
+        // Skip the FE fetch — there's nothing to load.
+        if ( (int) $run['entry_id'] <= 0 ) {
+            return $context;
+        }
+
         if ( class_exists( 'FRE_Entry' ) ) {
-            $entry_repo  = new FRE_Entry();
+            $entry_repo   = new FRE_Entry();
             $entry_record = $entry_repo->get( (int) $run['entry_id'] );
             if ( $entry_record ) {
                 $context->set_entry( $entry_record );
