@@ -3,7 +3,12 @@
  * REST authentication helpers.
  *
  * Capability checks for connector REST endpoints. All endpoints require
- * the 'manage_options' capability — FlowMint operates the plugin, not clients.
+ * the FMW_Capabilities::MANAGE_WORKFLOWS capability (default
+ * `flowmint_manage_workflows`, filterable via
+ * `flowmint_manage_workflows_capability`). Granted to administrator
+ * by default. Pre-v0.7.0 sites used `manage_options` directly; the
+ * scoped capability lets multi-user sites delegate FlowMint access
+ * without granting site-wide super-admin.
  *
  * @package FlowMintWorkflows
  */
@@ -20,7 +25,11 @@ class FMW_REST_Auth {
      * Two-gate check (matches the FRE / Promptless connector pattern):
      *   1. The connector kill switch must be on. Default off — site
      *      administrator opts in via FlowMint Workflows → Claude Connection.
-     *   2. The authenticated user must hold manage_options.
+     *   2. The authenticated user must hold the scoped
+     *      FMW_Capabilities::MANAGE_WORKFLOWS capability (granted to
+     *      administrator by default; site operators can delegate to
+     *      editors / custom roles via WP_Role::add_cap or via the
+     *      `flowmint_default_manage_workflows_roles` filter).
      *
      * The /preflight endpoint is intentionally exempt from gate 1 so
      * Claude Cowork can introspect the site state ("is the connector on?")
@@ -39,10 +48,20 @@ class FMW_REST_Auth {
      * @return bool|WP_Error
      */
     public static function require_manage( $request = null ) {
-        if ( ! current_user_can( 'manage_options' ) ) {
+        $required_cap = class_exists( 'FMW_Capabilities' )
+            ? FMW_Capabilities::required_capability()
+            : 'manage_options'; // Defensive fallback if the cap class
+                                // somehow didn't load — keeps the gate
+                                // strict rather than open.
+
+        if ( ! current_user_can( $required_cap ) ) {
             return new WP_Error(
                 'permission_denied',
-                'You need manage_options capability to access this endpoint.',
+                sprintf(
+                    /* translators: %s: capability name */
+                    'You need the %s capability to access this endpoint.',
+                    $required_cap
+                ),
                 [ 'status' => rest_authorization_required_code() ]
             );
         }

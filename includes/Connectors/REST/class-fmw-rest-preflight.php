@@ -47,7 +47,13 @@ class FMW_REST_Preflight {
             'action_scheduler_active' => function_exists( 'as_enqueue_async_action' ),
             'authenticated_as'       => wp_get_current_user()->user_login,
             'user_capabilities'      => [
-                'fmw_manage'       => current_user_can( 'manage_options' ),
+                // Reports against the scoped MANAGE_WORKFLOWS capability so
+                // the connector preflight reflects the actual permission
+                // gate REST endpoints check. Pre-v0.7.0 this checked
+                // manage_options directly; mirrors the swap there.
+                'fmw_manage'       => class_exists( 'FMW_Capabilities' )
+                    ? FMW_Capabilities::current_user_can_manage_workflows()
+                    : current_user_can( 'manage_options' ),
             ],
             // Trigger types this install can execute. MCP clients use
             // this to decide whether to surface the "scheduled workflow"

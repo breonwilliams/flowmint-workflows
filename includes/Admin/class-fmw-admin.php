@@ -35,7 +35,7 @@ class FMW_Admin {
         add_menu_page(
             __( 'FlowMint Workflows', 'flowmint-workflows' ),
             __( 'FlowMint Workflows', 'flowmint-workflows' ),
-            'manage_options',
+            FMW_Capabilities::MANAGE_WORKFLOWS,
             'fmw-runs',
             [ $this, 'render_runs_page' ],
             'dashicons-randomize',
@@ -46,7 +46,7 @@ class FMW_Admin {
             'fmw-runs',
             __( 'Run History', 'flowmint-workflows' ),
             __( 'Run History', 'flowmint-workflows' ),
-            'manage_options',
+            FMW_Capabilities::MANAGE_WORKFLOWS,
             'fmw-runs',
             [ $this, 'render_runs_page' ]
         );
@@ -55,7 +55,7 @@ class FMW_Admin {
             'fmw-runs',
             __( 'Workflows', 'flowmint-workflows' ),
             __( 'Workflows', 'flowmint-workflows' ),
-            'manage_options',
+            FMW_Capabilities::MANAGE_WORKFLOWS,
             'fmw-workflows',
             [ $this, 'render_workflows_page' ]
         );
@@ -104,7 +104,7 @@ class FMW_Admin {
      * Handle a manual replay request from the admin UI.
      */
     public function handle_replay() {
-        if ( ! current_user_can( 'manage_options' ) ) {
+        if ( ! current_user_can( FMW_Capabilities::MANAGE_WORKFLOWS ) ) {
             wp_die( 'Permission denied' );
         }
 

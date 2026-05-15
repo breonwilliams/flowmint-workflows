@@ -34,7 +34,7 @@ define( 'FMW_VERSION', '0.6.0-rc1' );
 // 0.2.0 (v0.6.0 dev) — Scheduled triggers. Adds trigger_type column to
 // wp_fmw_workflows, makes form_id nullable, adds idx_trigger_type index.
 // See FMW_Schema::migrate_to_0_2_0() for the migration logic.
-define( 'FMW_DB_VERSION', '0.2.0' );
+define( 'FMW_DB_VERSION', '0.3.0' );
 
 // Plugin paths and URLs.
 define( 'FMW_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -280,6 +280,13 @@ final class FlowMint_Workflows {
 
     /**
      * Run database schema migration if needed.
+     *
+     * Also runs the capability re-grant on every version upgrade. Mirrors
+     * FRE_Upgrader's pattern — capability grants are idempotent (WP's
+     * add_cap no-ops when the role already has the cap) so this is safe
+     * to call repeatedly. Necessary because plugin auto-updates and
+     * wp-cli updates don't always re-trigger the activation hook;
+     * version-bump is the reliable signal that "something changed."
      */
     private function maybe_run_db_migration() {
         $stored_version = get_option( 'fmw_db_version', '0.0.0' );
@@ -287,6 +294,13 @@ final class FlowMint_Workflows {
         if ( version_compare( $stored_version, FMW_DB_VERSION, '<' ) ) {
             FMW_Schema::migrate( $stored_version, FMW_DB_VERSION );
             update_option( 'fmw_db_version', FMW_DB_VERSION );
+
+            // Re-grant capabilities on every version upgrade so existing
+            // sites pick up new caps without manual re-activation. Safe
+            // for the no-new-caps case — add_cap is idempotent.
+            if ( class_exists( 'FMW_Capabilities' ) ) {
+                FMW_Capabilities::grant_default_capabilities();
+            }
         }
     }
 
@@ -347,6 +361,14 @@ final class FlowMint_Workflows {
         if ( class_exists( 'FMW_Schema' ) ) {
             FMW_Schema::create_tables();
             update_option( 'fmw_db_version', FMW_DB_VERSION );
+        }
+
+        // Grant the scoped capability to default roles. The version-upgrade
+        // path also calls this, but activation is the canonical first
+        // grant on fresh installs (and on manual re-activation). add_cap
+        // is idempotent so calling both paths is safe.
+        if ( class_exists( 'FMW_Capabilities' ) ) {
+            FMW_Capabilities::grant_default_capabilities();
         }
 
         // Stamp activation time.

@@ -55,7 +55,7 @@ class FMW_Connector_Admin {
     public function init() {
         add_action( 'admin_menu', array( $this, 'register_submenu' ), 20 );
 
-        // AJAX handlers — only logged-in admins with manage_options can hit them.
+        // AJAX handlers — only users with FMW_Capabilities::MANAGE_WORKFLOWS can hit them.
         add_action( 'wp_ajax_fmw_connector_toggle_enabled', array( $this, 'ajax_toggle_enabled' ) );
         add_action( 'wp_ajax_fmw_connector_generate_password', array( $this, 'ajax_generate_password' ) );
         add_action( 'wp_ajax_fmw_connector_revoke_password', array( $this, 'ajax_revoke_password' ) );
@@ -79,7 +79,7 @@ class FMW_Connector_Admin {
             'fmw-runs',
             __( 'Claude Connection', 'flowmint-workflows' ),
             __( 'Claude Connection', 'flowmint-workflows' ),
-            'manage_options',
+            FMW_Capabilities::MANAGE_WORKFLOWS,
             self::PAGE_SLUG,
             array( $this, 'render_page' )
         );
@@ -93,7 +93,7 @@ class FMW_Connector_Admin {
      * not worth the complexity.
      */
     public function render_page() {
-        if ( ! current_user_can( 'manage_options' ) ) {
+        if ( ! current_user_can( FMW_Capabilities::MANAGE_WORKFLOWS ) ) {
             wp_die( esc_html__( 'You do not have permission to access this page.', 'flowmint-workflows' ) );
         }
 
@@ -419,7 +419,7 @@ class FMW_Connector_Admin {
     private function verify_ajax() {
         check_ajax_referer( self::NONCE_ACTION, 'nonce' );
 
-        if ( ! current_user_can( 'manage_options' ) ) {
+        if ( ! current_user_can( FMW_Capabilities::MANAGE_WORKFLOWS ) ) {
             wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'flowmint-workflows' ) ), 403 );
         }
     }

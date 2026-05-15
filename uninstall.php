@@ -63,5 +63,19 @@ if ( function_exists( 'as_unschedule_all_actions' ) ) {
     as_unschedule_all_actions( null, [], 'fmw' );
 }
 
+// Revoke the scoped capability from every role. The autoloader doesn't run
+// during uninstall (PHP's plugin-uninstall flow loads only this file), so
+// we include the capability class directly. Iterates ALL roles — admins
+// may have delegated the capability to custom roles via add_cap or via
+// the `flowmint_default_manage_workflows_roles` filter, and uninstall
+// must clean up all traces.
+$caps_class_path = plugin_dir_path( __FILE__ ) . 'includes/Core/class-fmw-capabilities.php';
+if ( file_exists( $caps_class_path ) ) {
+    require_once $caps_class_path;
+    if ( class_exists( 'FMW_Capabilities' ) ) {
+        FMW_Capabilities::revoke_all_capabilities();
+    }
+}
+
 // Note: this does NOT touch any wp_fre_* tables, fre_* options, or any other
 // data owned by Form Runtime Engine or other plugins.
