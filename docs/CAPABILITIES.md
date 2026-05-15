@@ -81,7 +81,18 @@ When the plugin is deleted (not just deactivated) via the WP Plugins admin page,
 This pattern aligns with:
 
 - **FRE (Form Runtime Engine):** `fre_manage_forms` via `FRE_Capabilities::MANAGE_FORMS`
-- **PRE (Post Runtime Engine):** v1.0 uses `manage_options` directly via `PRE_Capabilities::MANAGE_CAP`; v1.1 will introduce a scoped capability following this same pattern
-- **Promptless WP:** uses WordPress's built-in `edit_posts` / `manage_options` for content vs. site-shaping actions; a scoped `promptless_manage_sections` capability is on the v1.5 roadmap
+- **PRE (Post Runtime Engine):** `pre_manage_cpts` via `PRE_Capabilities::MANAGE_CAP` (v0.4+; see [PRE CAPABILITIES.md](../../post-runtime-engine/docs/CAPABILITIES.md))
+- **Promptless WP:** `promptless_manage_settings` via `\AISB\Modern\Core\Capabilities::MANAGE_SETTINGS` (v1.4+; see [Promptless CAPABILITIES.md](../../ai-section-builder-modern/docs/development/CAPABILITIES.md))
 
 Each plugin owns its own scoped capability. Multi-user sites (agencies with client editors, e-commerce teams with marketing roles, nonprofit volunteer setups) can grant per-plugin access without giving up site-wide super-admin.
+
+### Capability summary across the family
+
+| Plugin | Capability | Constant | Granted to (default) |
+|---|---|---|---|
+| Form Runtime Engine | `fre_manage_forms` | `FRE_Capabilities::MANAGE_FORMS` | `administrator` |
+| FlowMint Workflows | `flowmint_manage_workflows` | `FMW_Capabilities::MANAGE_WORKFLOWS` | `administrator` |
+| Post Runtime Engine | `pre_manage_cpts` | `PRE_Capabilities::MANAGE_CAP` | `administrator` |
+| Promptless WP | `promptless_manage_settings` | `\AISB\Modern\Core\Capabilities::MANAGE_SETTINGS` | `administrator` |
+
+Each plugin's `default_*_roles()` (or equivalent) is filterable so the same site-wide grant pattern works on any role model. Each plugin's `revoke_all_capabilities()` runs on uninstall so role tables stay clean.
