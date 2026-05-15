@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-## [0.6.0-rc1] — 2026-05-13
+## [0.6.0] — 2026-05-15
 
 ### Added — Scheduled workflow triggers
 
@@ -61,7 +61,7 @@ Workflows can now be triggered on a recurring schedule (hourly / twice-daily / d
 - Phase 2 (32 checks) — listener wiring, AS event registration on save/update/disable/delete, end-to-end tick → run completes synchronously, reconciliation drift correction, form-triggered regression unaffected.
 - Phase 3 (35 checks) — both new step types registered with correct metadata, every documented filter combination on `fre_list_entries`, idempotency + mixed-input tolerance on `fre_delete_entries`, end-to-end retention workflow scenario with the actual 725 use case JSON.
 
-**Plugin version stamp:** This is `0.6.0-rc1` — a release candidate for the 725 Print Lab production verification. The stamp moves to clean `0.6.0` after 725 confirms healthy operation. See `RELEASE.md` for the release procedure.
+**Plugin version stamp:** `0.6.0` — stable release following 725 Print Lab production verification.
 
 ## [0.5.0] — 2026-05-10
 

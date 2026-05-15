@@ -4,7 +4,7 @@ Tags: workflow, automation, form submissions, async, action scheduler
 Requires at least: 5.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 0.6.0-rc1
+Stable tag: 0.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,7 +57,7 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 
 == Changelog ==
 
-= 0.6.0-rc1 — 2026-05-13 =
+= 0.6.0 — 2026-05-15 =
 * **New: Scheduled workflow triggers.** Workflows can now fire on a recurring schedule (`hourly` / `twicedaily` / `daily` / `weekly`) in addition to form submissions. Two trigger types in v0.6: `{ type: "form", form_id: "…" }` (existing pattern, explicit) and `{ type: "schedule", interval: "…", hour: …, minute: …, day_of_week: … }` (new). Existing form-triggered workflows are normalized into the new shape transparently; no JSON changes required.
 * **New step types:** `fre_list_entries` (query FE entries by form, status, and age) and `fre_delete_entries` (bulk-delete, idempotent, per-id failure tolerant). Designed for retention workflows — typical chain is `fre_list_entries → fre_delete_entries → log_info`.
 * **New class:** `FMW_Schedule_Listener` — registers Action Scheduler recurring events on workflow save/enable, unschedules on disable/delete, handles tick dispatch through to the existing executor.
@@ -88,7 +88,7 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 
 == Upgrade Notice ==
 
-= 0.6.0-rc1 =
+= 0.6.0 =
 Adds scheduled workflow triggers (hourly / daily / weekly / twicedaily) and two new step types for bulk-querying and deleting FormEngine entries. Database schema bumps to v0.2.0 via additive ALTER (nullable form_id + new trigger_type column with index). Migration runs automatically on the first plugin load and is idempotent. Existing form-triggered workflows are unaffected — they're normalized into the new trigger-block shape transparently. Rolling back to v0.5.0 does NOT require dropping the new column; the older code simply ignores it.
 
 = 0.5.0 =
