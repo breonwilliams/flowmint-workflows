@@ -75,10 +75,16 @@ class FMW_Connector_Admin {
      * (Run History, Workflows) which register at default priority 10.
      */
     public function register_submenu() {
+        // Menu label is the neutral "Connector" to match Promptless / PRE /
+        // FRE and stay future-proof for additional AI client integrations
+        // (Codex, ChatGPT Desktop, etc.). The page H1 carries the
+        // plugin-specific name ("The FlowMint Connector"). Renamed from
+        // "Claude Connection" 2026-05-16 — the connector itself is vendor-
+        // neutral; only the current default client happens to be Claude.
         add_submenu_page(
             'fmw-runs',
-            __( 'Claude Connection', 'flowmint-workflows' ),
-            __( 'Claude Connection', 'flowmint-workflows' ),
+            __( 'The FlowMint Connector', 'flowmint-workflows' ),
+            __( 'Connector', 'flowmint-workflows' ),
             FMW_Capabilities::MANAGE_WORKFLOWS,
             self::PAGE_SLUG,
             array( $this, 'render_page' )
@@ -106,151 +112,264 @@ class FMW_Connector_Admin {
         $api_doc_url           = plugins_url( 'docs/CONNECTOR_API.md', FMW_PLUGIN_FILE );
         $connector_script_url  = esc_url_raw( admin_url( 'admin-ajax.php?action=fmw_download_connector' ) );
         $site_url              = esc_url_raw( home_url() );
+
+        // App-password availability check — see PRE/Promptless equivalents
+        // for the rationale. Returns true on HTTPS sites OR local dev
+        // environments via WP_ENVIRONMENT_TYPE='local'.
+        $app_passwords_available = wp_is_application_passwords_available();
         ?>
-        <div class="wrap fmw-claude-connection">
-            <h1><?php esc_html_e( 'Claude Connection', 'flowmint-workflows' ); ?></h1>
-
-            <p class="description" style="max-width: 720px;">
-                <?php
-                echo wp_kses(
-                    sprintf(
-                        /* translators: %s: link to the connector API document. */
-                        __( 'This page manages the Claude Cowork connector — a REST API plus MCP bridge that lets Claude Cowork create, update, and inspect FlowMint workflows on this site. Full API specification: <a href="%s" target="_blank" rel="noopener">CONNECTOR_API.md</a>.', 'flowmint-workflows' ),
-                        esc_url( $api_doc_url )
-                    ),
-                    array( 'a' => array( 'href' => true, 'target' => true, 'rel' => true ) )
-                );
-                ?>
+        <div class="wrap fmw-connector-settings">
+            <h1><?php esc_html_e( 'The FlowMint Connector', 'flowmint-workflows' ); ?></h1>
+            <p class="fmw-connector-subtitle">
+                <?php esc_html_e( 'Connect Claude Desktop to your WordPress site so it can create and manage FlowMint workflows.', 'flowmint-workflows' ); ?>
             </p>
 
-            <h2 class="title"><?php esc_html_e( 'Step 1 — Enable the connector', 'flowmint-workflows' ); ?></h2>
-            <p>
-                <?php esc_html_e( 'Default is off. When off, every connector REST endpoint returns 403 regardless of credentials. This is the site-wide kill switch — turn it off any time to immediately revoke remote access.', 'flowmint-workflows' ); ?>
-            </p>
-            <p>
-                <label>
-                    <input type="checkbox"
-                        id="fmw-connector-enabled"
-                        <?php checked( $is_enabled ); ?>
-                    >
-                    <strong><?php esc_html_e( 'Enable Claude Cowork Connection', 'flowmint-workflows' ); ?></strong>
-                </label>
-                <span class="fmw-toggle-status" id="fmw-enabled-status" aria-live="polite"></span>
-            </p>
+            <?php if ( ! $app_passwords_available ) : ?>
+                <div class="notice notice-warning" style="margin: 12px 0 20px;">
+                    <p><strong><?php esc_html_e( 'Application passwords not available on this site.', 'flowmint-workflows' ); ?></strong>
+                    <?php esc_html_e( "WordPress requires either HTTPS or a local environment to issue application passwords. Until that's set up, the \"Generate Connection\" button will return an error.", 'flowmint-workflows' ); ?></p>
+                    <ul style="margin: 6px 0 6px 24px; list-style: disc;">
+                        <li><?php echo wp_kses( __( '<strong>On a production site:</strong> enable HTTPS / install an SSL certificate.', 'flowmint-workflows' ), array( 'strong' => array() ) ); ?></li>
+                        <li><?php echo wp_kses( __( "<strong>For local development:</strong> add <code>define('WP_ENVIRONMENT_TYPE', 'local');</code> to your <code>wp-config.php</code>. Most local environments (Local by Flywheel, wp-env, LocalWP) set this automatically.", 'flowmint-workflows' ), array( 'strong' => array(), 'code' => array() ) ); ?></li>
+                    </ul>
+                </div>
+            <?php endif; ?>
 
-            <h2 class="title"><?php esc_html_e( 'Step 2 — Generate an Application Password', 'flowmint-workflows' ); ?></h2>
-            <p>
-                <?php esc_html_e( 'The connector authenticates via a WordPress Application Password. Generating one here revokes any previous connector credential for your user, so there is at most one active connector key at any time. The password is shown once — copy it immediately.', 'flowmint-workflows' ); ?>
-            </p>
-
-            <?php if ( $configured_at > 0 ) : ?>
-                <p>
-                    <span class="fmw-badge fmw-badge-success">
+            <!-- Connection Status card. Status pill + kill-switch toggle.
+                 Tucks the security toggle next to the visual status so the
+                 setup flow below stays at 3 clean steps. -->
+            <div class="fmw-connector-card" id="fmw-connector-status-card">
+                <h2><?php esc_html_e( 'Connection Status', 'flowmint-workflows' ); ?></h2>
+                <div class="fmw-connector-status-row">
+                    <span class="fmw-connector-status-badge <?php echo $configured_at > 0 ? 'fmw-connector-status-active' : 'fmw-connector-status-inactive'; ?>" id="fmw-connector-status-pill">
+                        <?php echo $configured_at > 0 ? esc_html__( 'Configured', 'flowmint-workflows' ) : esc_html__( 'Not Connected', 'flowmint-workflows' ); ?>
+                    </span>
+                    <label class="fmw-connector-killswitch">
+                        <input type="checkbox"
+                            id="fmw-connector-enabled"
+                            <?php checked( $is_enabled ); ?>
+                        >
+                        <span><?php esc_html_e( 'Allow Claude Cowork to call this site', 'flowmint-workflows' ); ?></span>
+                        <span class="fmw-connector-toggle-status" id="fmw-enabled-status" aria-live="polite"></span>
+                    </label>
+                </div>
+                <p class="fmw-connector-status-help">
+                    <?php if ( $configured_at > 0 ) : ?>
                         <?php
                         printf(
                             /* translators: %s: localized timestamp */
-                            esc_html__( 'Configured %s', 'flowmint-workflows' ),
+                            esc_html__( 'Last configured: %s. Generate a new connection below if you need to reconfigure.', 'flowmint-workflows' ),
                             esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $configured_at ) )
                         );
                         ?>
-                    </span>
+                    <?php else : ?>
+                        <?php esc_html_e( 'Follow the steps below to connect Claude Desktop to your site.', 'flowmint-workflows' ); ?>
+                    <?php endif; ?>
                 </p>
-            <?php else : ?>
+            </div>
+
+            <!-- Step 1: Generate Connection -->
+            <div class="fmw-connector-card">
+                <h2><?php esc_html_e( 'Step 1: Generate Connection', 'flowmint-workflows' ); ?></h2>
+                <p><?php esc_html_e( 'This creates a secure application password that allows Claude to communicate with your site. Any existing connection will be replaced.', 'flowmint-workflows' ); ?></p>
                 <p>
-                    <span class="fmw-badge fmw-badge-muted"><?php esc_html_e( 'Not configured', 'flowmint-workflows' ); ?></span>
-                </p>
-            <?php endif; ?>
-
-            <p>
-                <button type="button" class="button button-primary" id="fmw-generate-password-btn">
-                    <?php
-                    echo $configured_at > 0
-                        ? esc_html__( 'Regenerate Connection', 'flowmint-workflows' )
-                        : esc_html__( 'Generate Connection', 'flowmint-workflows' );
-                    ?>
-                </button>
-                <?php if ( $configured_at > 0 ) : ?>
-                    <button type="button" class="button" id="fmw-revoke-password-btn">
-                        <?php esc_html_e( 'Revoke Connection', 'flowmint-workflows' ); ?>
+                    <button type="button" id="fmw-generate-password-btn" class="button button-primary">
+                        <?php
+                        echo $configured_at > 0
+                            ? esc_html__( 'Regenerate Connection', 'flowmint-workflows' )
+                            : esc_html__( 'Generate Connection', 'flowmint-workflows' );
+                        ?>
                     </button>
-                <?php endif; ?>
-            </p>
-
-            <div id="fmw-credential-display" style="display:none;margin:12px 0;padding:16px;background:#fff;border-left:4px solid #2271b1;">
-                <p style="margin-top:0;">
-                    <strong><?php esc_html_e( 'Application Password (copy now — it will not be shown again):', 'flowmint-workflows' ); ?></strong>
+                    <?php if ( $configured_at > 0 ) : ?>
+                        <button type="button" id="fmw-revoke-password-btn" class="button">
+                            <?php esc_html_e( 'Revoke Connection', 'flowmint-workflows' ); ?>
+                        </button>
+                    <?php endif; ?>
                 </p>
-                <pre id="fmw-credential-value" style="background:#f6f7f7;padding:12px;overflow-x:auto;"></pre>
-                <p style="margin-bottom:0;">
-                    <strong><?php esc_html_e( 'Username:', 'flowmint-workflows' ); ?></strong>
-                    <code><?php echo esc_html( $current_user->user_login ); ?></code>
-                </p>
-            </div>
 
-            <h2 class="title"><?php esc_html_e( 'Step 3 — Connect Claude Desktop', 'flowmint-workflows' ); ?></h2>
-            <p>
-                <?php
-                echo wp_kses(
-                    sprintf(
-                        /* translators: %s: link to MCP setup documentation */
-                        __( 'Copy the command below and paste it into Terminal on your Mac. It downloads the MCP server script to <code>~/flowmint-mcp/</code>, detects your Node.js installation, and registers the connector with Claude Desktop. Full setup notes and troubleshooting are in <a href="%s" target="_blank" rel="noopener">MCP_CONNECTOR_SETUP.md</a>.', 'flowmint-workflows' ),
-                        esc_url( $setup_doc_url )
-                    ),
-                    array( 'a' => array( 'href' => true, 'target' => true, 'rel' => true ), 'code' => array() )
-                );
-                ?>
-            </p>
-
-            <div class="fmw-setup-requirements">
-                <strong><?php esc_html_e( 'Requirements:', 'flowmint-workflows' ); ?></strong>
-                <ul style="margin: 6px 0 0 20px;">
-                    <li><?php esc_html_e( 'macOS with Terminal', 'flowmint-workflows' ); ?></li>
-                    <li><?php esc_html_e( 'Node.js v14+ (via nvm, Homebrew, or system installer)', 'flowmint-workflows' ); ?></li>
-                    <li><?php esc_html_e( 'Claude Desktop installed', 'flowmint-workflows' ); ?></li>
-                </ul>
-            </div>
-
-            <div id="fmw-setup-command-placeholder" style="margin-top:12px;<?php echo $configured_at > 0 ? 'display:none;' : ''; ?>">
-                <p class="description" style="color:#888;">
-                    <?php esc_html_e( 'Generate a connection in Step 2 first, then your setup command will appear here.', 'flowmint-workflows' ); ?>
-                </p>
-            </div>
-
-            <div id="fmw-setup-command-wrap" style="display:none;margin-top:12px;">
-                <div style="background:#f6f7f7;border:1px solid #c3c4c7;padding:12px;position:relative;">
-                    <pre id="fmw-setup-command" style="margin:0;white-space:pre;overflow-x:auto;font-size:12px;line-height:1.5;"></pre>
-                    <button type="button" class="button button-small" id="fmw-copy-setup-command" style="position:absolute;top:8px;right:8px;">
-                        <?php esc_html_e( 'Copy', 'flowmint-workflows' ); ?>
-                    </button>
+                <div id="fmw-credential-display" class="fmw-connector-success-notice" style="display:none;">
+                    <p><strong><?php esc_html_e( 'Connection generated successfully!', 'flowmint-workflows' ); ?></strong> <?php esc_html_e( 'Now proceed to Step 2.', 'flowmint-workflows' ); ?></p>
                 </div>
-                <p class="description" style="margin-top:8px;">
-                    <?php esc_html_e( 'After the command completes, quit Claude Desktop (Cmd+Q) and reopen it. The connector will be active in your next Cowork session.', 'flowmint-workflows' ); ?>
-                </p>
             </div>
 
-            <h2 class="title"><?php esc_html_e( 'REST endpoint reference', 'flowmint-workflows' ); ?></h2>
-            <p>
-                <?php esc_html_e( 'Base URL for all connector endpoints:', 'flowmint-workflows' ); ?>
-                <br>
-                <code><?php echo esc_html( $rest_base_url ); ?></code>
-            </p>
-            <p>
-                <?php
-                printf(
-                    /* translators: %s: API doc URL */
-                    esc_html__( 'See the full endpoint list and request/response schemas in the %s.', 'flowmint-workflows' ),
-                    '<a href="' . esc_url( $api_doc_url ) . '" target="_blank" rel="noopener">' . esc_html__( 'connector API documentation', 'flowmint-workflows' ) . '</a>'
-                );
-                ?>
-            </p>
+            <!-- Step 2: Run Setup Command -->
+            <div class="fmw-connector-card">
+                <h2><?php esc_html_e( 'Step 2: Run Setup Command', 'flowmint-workflows' ); ?></h2>
+                <p><?php esc_html_e( 'Copy the command below and paste it into', 'flowmint-workflows' ); ?> <strong><?php esc_html_e( 'Terminal', 'flowmint-workflows' ); ?></strong> <?php esc_html_e( 'on your Mac. This automatically installs and configures the FlowMint Connector.', 'flowmint-workflows' ); ?></p>
+
+                <div class="fmw-connector-requirements">
+                    <strong><?php esc_html_e( 'Requirements:', 'flowmint-workflows' ); ?></strong>
+                    <ul>
+                        <li><?php esc_html_e( 'macOS with Terminal', 'flowmint-workflows' ); ?></li>
+                        <li><?php esc_html_e( 'Node.js installed (v14 or higher)', 'flowmint-workflows' ); ?></li>
+                        <li><?php esc_html_e( 'Claude Desktop app installed', 'flowmint-workflows' ); ?></li>
+                    </ul>
+                </div>
+
+                <div id="fmw-setup-command-container" style="display:none;">
+                    <div class="fmw-connector-code-block">
+                        <pre id="fmw-setup-command"></pre>
+                        <button type="button" class="button fmw-connector-copy-btn" id="fmw-copy-setup-command"><?php esc_html_e( 'Copy Command', 'flowmint-workflows' ); ?></button>
+                    </div>
+                    <p class="description"><?php esc_html_e( 'After running the command, quit Claude Desktop (Cmd+Q) and reopen it. The connector will be active in your next session.', 'flowmint-workflows' ); ?></p>
+                </div>
+
+                <div id="fmw-setup-command-placeholder">
+                    <p class="description" style="color:#999;">
+                        <?php if ( $configured_at > 0 ) : ?>
+                            <?php esc_html_e( 'Your connection is configured. To see the setup command again, click "Regenerate Connection" in Step 1.', 'flowmint-workflows' ); ?>
+                        <?php else : ?>
+                            <?php esc_html_e( 'Generate a connection in Step 1 first, then your setup command will appear here.', 'flowmint-workflows' ); ?>
+                        <?php endif; ?>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Step 3: Verify Connection -->
+            <div class="fmw-connector-card">
+                <h2><?php esc_html_e( 'Step 3: Verify Connection', 'flowmint-workflows' ); ?></h2>
+                <p><?php esc_html_e( 'After running the setup command and restarting Claude Desktop, start a new conversation and type:', 'flowmint-workflows' ); ?></p>
+                <div class="fmw-connector-code-block">
+                    <pre><?php esc_html_e( 'List the FlowMint workflows on my site.', 'flowmint-workflows' ); ?></pre>
+                </div>
+                <p><?php esc_html_e( 'Claude should respond with your workflows, confirming the connection is active.', 'flowmint-workflows' ); ?></p>
+            </div>
+
+            <!-- Developer info — collapsed by default. -->
+            <details class="fmw-connector-dev-info">
+                <summary><?php esc_html_e( 'Developer info', 'flowmint-workflows' ); ?></summary>
+                <dl>
+                    <dt><?php esc_html_e( 'REST base URL', 'flowmint-workflows' ); ?></dt>
+                    <dd><code><?php echo esc_html( $rest_base_url ); ?></code></dd>
+                    <dt><?php esc_html_e( 'Authenticated user', 'flowmint-workflows' ); ?></dt>
+                    <dd><code><?php echo esc_html( $current_user->user_login ); ?></code></dd>
+                    <dt><?php esc_html_e( 'Documentation', 'flowmint-workflows' ); ?></dt>
+                    <dd>
+                        <a href="<?php echo esc_url( $api_doc_url ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'Connector API documentation', 'flowmint-workflows' ); ?></a>
+                        &middot;
+                        <a href="<?php echo esc_url( $setup_doc_url ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'MCP setup notes', 'flowmint-workflows' ); ?></a>
+                    </dd>
+                </dl>
+            </details>
         </div>
 
         <style>
-            .fmw-claude-connection h2.title { margin-top: 2em; }
-            .fmw-toggle-status { margin-left: 10px; font-style: italic; color: #50575e; }
-            .fmw-badge { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 12px; font-weight: 500; }
-            .fmw-badge-success { background: #d1e7dd; color: #0f5132; }
-            .fmw-badge-muted { background: #e9ecef; color: #6c757d; }
+            /* FlowMint connector admin styles — mirrors Promptless's .aisb-*
+             * visual treatment with .fmw-connector-* prefix so the three
+             * Promptless-family plugins all look like siblings. Refactored
+             * 2026-05-16 from a flat-text 3-step layout to this card-based
+             * 3-step layout with the kill-switch tucked into the Status
+             * card. */
+            .fmw-connector-settings { max-width: 800px; }
+            .fmw-connector-subtitle { font-size: 14px; color: #646970; margin-top: -5px; }
+
+            .fmw-connector-card {
+                background: #fff;
+                border: 1px solid #c3c4c7;
+                border-radius: 4px;
+                padding: 20px 24px;
+                margin-bottom: 20px;
+            }
+            .fmw-connector-card h2 {
+                margin-top: 0;
+                padding-top: 0;
+                font-size: 16px;
+                border-bottom: none;
+            }
+
+            .fmw-connector-status-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 16px;
+                flex-wrap: wrap;
+                margin-bottom: 8px;
+            }
+            .fmw-connector-status-badge {
+                display: inline-block;
+                padding: 4px 12px;
+                border-radius: 12px;
+                font-size: 13px;
+                font-weight: 500;
+            }
+            .fmw-connector-status-active { background: #d4edda; color: #155724; }
+            .fmw-connector-status-inactive { background: #f8d7da; color: #721c24; }
+            .fmw-connector-status-help { margin: 0; color: #50575e; }
+
+            .fmw-connector-killswitch { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #1d2327; }
+            .fmw-connector-toggle-status { font-style: italic; color: #50575e; min-width: 60px; }
+
+            .fmw-connector-success-notice {
+                margin: 12px 0 0 0;
+                padding: 8px 12px;
+                background: #edf7ed;
+                border-left: 3px solid #46b450;
+                border-radius: 0 4px 4px 0;
+            }
+            .fmw-connector-success-notice p { margin: 0; }
+
+            .fmw-connector-requirements {
+                background: #f0f6fc;
+                border: 1px solid #c8d8e4;
+                border-radius: 4px;
+                padding: 12px 16px;
+                margin: 12px 0;
+            }
+            .fmw-connector-requirements ul { margin: 4px 0 0 20px; }
+            .fmw-connector-requirements li { margin-bottom: 2px; }
+
+            .fmw-connector-code-block {
+                position: relative;
+                background: #1d2327;
+                color: #50c878;
+                padding: 16px 20px;
+                border-radius: 6px;
+                margin: 12px 0;
+                overflow-x: auto;
+            }
+            .fmw-connector-code-block pre {
+                margin: 0;
+                white-space: pre-wrap;
+                word-break: break-all;
+                font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+                font-size: 13px;
+                line-height: 1.6;
+                color: #50c878;
+            }
+            .fmw-connector-copy-btn {
+                position: absolute !important;
+                top: 8px !important;
+                right: 8px !important;
+                font-size: 12px !important;
+                padding: 2px 10px !important;
+                min-height: 28px !important;
+            }
+
+            .fmw-connector-dev-info {
+                margin-top: 20px;
+                padding: 12px 16px;
+                background: #f6f7f7;
+                border: 1px solid #c3c4c7;
+                border-radius: 4px;
+            }
+            .fmw-connector-dev-info summary {
+                cursor: pointer;
+                font-weight: 600;
+                color: #1d2327;
+                outline: none;
+            }
+            .fmw-connector-dev-info[open] summary { margin-bottom: 8px; }
+            .fmw-connector-dev-info dl { margin: 0; }
+            .fmw-connector-dev-info dt {
+                font-weight: 600;
+                color: #50575e;
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                margin-top: 10px;
+            }
+            .fmw-connector-dev-info dt:first-child { margin-top: 0; }
+            .fmw-connector-dev-info dd { margin: 4px 0 0 0; font-size: 13px; }
         </style>
 
         <script>
@@ -311,7 +430,8 @@ class FMW_Connector_Admin {
             function showSetupCommand(username, password) {
                 const cmd = buildSetupCommand(username, password);
                 document.getElementById('fmw-setup-command').textContent = cmd;
-                document.getElementById('fmw-setup-command-wrap').style.display = 'block';
+                const container = document.getElementById('fmw-setup-command-container');
+                if (container) container.style.display = 'block';
                 const placeholder = document.getElementById('fmw-setup-command-placeholder');
                 if (placeholder) placeholder.style.display = 'none';
             }
@@ -353,18 +473,35 @@ class FMW_Connector_Admin {
             const genBtn = document.getElementById('fmw-generate-password-btn');
             if (genBtn) {
                 genBtn.addEventListener('click', async () => {
-                    if (!confirm('<?php echo esc_js( __( 'Generate a new connection? Any previous connector App Password will be revoked immediately.', 'flowmint-workflows' ) ); ?>')) return;
+                    // No confirm() dialog — Promptless doesn't use one and
+                    // the blocking modal adds friction. Misclicks are
+                    // recoverable (click Generate again — the prior
+                    // password is already revoked atomically server-side).
+                    const originalLabel = genBtn.textContent;
                     genBtn.disabled = true;
+                    genBtn.textContent = '<?php echo esc_js( __( 'Generating...', 'flowmint-workflows' ) ); ?>';
                     const r = await post('fmw_connector_generate_password');
                     genBtn.disabled = false;
                     if (r.success) {
-                        document.getElementById('fmw-credential-display').style.display = 'block';
-                        document.getElementById('fmw-credential-value').textContent = r.data.password;
+                        // Reveal the success notice in Step 1 card.
+                        const display = document.getElementById('fmw-credential-display');
+                        if (display) display.style.display = 'block';
 
-                        // Build the bash setup command while we still have the
-                        // plaintext password in memory — it is never shown again.
+                        // Build + reveal the setup command in Step 2 card.
                         showSetupCommand(r.data.username, r.data.password);
+
+                        // Flip the status pill in the Connection Status card
+                        // from red "Not Connected" to green "Configured".
+                        const pill = document.getElementById('fmw-connector-status-pill');
+                        if (pill) {
+                            pill.textContent = '<?php echo esc_js( __( 'Configured', 'flowmint-workflows' ) ); ?>';
+                            pill.classList.remove('fmw-connector-status-inactive');
+                            pill.classList.add('fmw-connector-status-active');
+                        }
+
+                        genBtn.textContent = '<?php echo esc_js( __( 'Regenerate Connection', 'flowmint-workflows' ) ); ?>';
                     } else {
+                        genBtn.textContent = originalLabel;
                         alert((r.data && r.data.message) || 'Error');
                     }
                 });
@@ -372,20 +509,38 @@ class FMW_Connector_Admin {
 
             const copyBtn = document.getElementById('fmw-copy-setup-command');
             if (copyBtn) {
+                // Capture original label so the restore-after-flash matches
+                // the template's rendered text (e.g. 'Copy Command') instead
+                // of being hardcoded to 'Copy'.
+                const originalCopyLabel = copyBtn.textContent;
+                const flashCopied = () => {
+                    copyBtn.textContent = '<?php echo esc_js( __( 'Copied', 'flowmint-workflows' ) ); ?>';
+                    setTimeout(() => { copyBtn.textContent = originalCopyLabel; }, 2000);
+                };
                 copyBtn.addEventListener('click', async () => {
-                    const cmd = document.getElementById('fmw-setup-command').textContent;
-                    try {
-                        await navigator.clipboard.writeText(cmd);
-                        copyBtn.textContent = '<?php echo esc_js( __( 'Copied', 'flowmint-workflows' ) ); ?>';
-                        setTimeout(() => { copyBtn.textContent = '<?php echo esc_js( __( 'Copy', 'flowmint-workflows' ) ); ?>'; }, 2000);
-                    } catch (e) {
-                        // Clipboard API unavailable — fall back to selecting the text.
-                        const sel = window.getSelection();
-                        const range = document.createRange();
-                        range.selectNodeContents(document.getElementById('fmw-setup-command'));
-                        sel.removeAllRanges();
-                        sel.addRange(range);
+                    const pre = document.getElementById('fmw-setup-command');
+                    const cmd = pre.textContent;
+                    // Path 1: modern Clipboard API. Only available on HTTPS
+                    // sites and true localhost — NOT on HTTP custom
+                    // hostnames like `mysite.local`.
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        try {
+                            await navigator.clipboard.writeText(cmd);
+                            flashCopied();
+                            return;
+                        } catch (e) { /* fall through */ }
                     }
+                    // Path 2: legacy execCommand fallback. Works on HTTP.
+                    const sel = window.getSelection();
+                    const range = document.createRange();
+                    range.selectNodeContents(pre);
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    try {
+                        const ok = document.execCommand('copy');
+                        sel.removeAllRanges();
+                        if (ok) flashCopied();
+                    } catch (e) { /* leave selection so user can Cmd+C */ }
                 });
             }
 
