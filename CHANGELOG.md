@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-05-17
+
+### Changed
+- Renamed connector admin page from "Claude Connection" to "Connector" (menu) / "The FlowMint Connector" (page title) — vendor-neutral naming future-proofed for additional AI clients
+- Redesigned connector page with card-based layout, clearer 3-step setup flow, and improved connection status display
+- Added warning notice when Application Passwords are unavailable (requires HTTPS or `WP_ENVIRONMENT_TYPE='local'`)
+
 ## [0.6.0] — 2026-05-15
 
 ### Added — Scheduled workflow triggers
