@@ -154,9 +154,9 @@ class FMW_Workflow_Context {
     }
 
     /**
-     * Set the entry metadata + files from FRE_Entry record.
+     * Set the entry metadata + files from PForms_Entry record.
      *
-     * @param array $entry_record FE entry as returned by FRE_Entry::get()
+     * @param array $entry_record FE entry as returned by PForms_Entry::get()
      */
     public function set_entry( array $entry_record ) {
         // Strip the fields/files arrays out — those become data and entry_files.

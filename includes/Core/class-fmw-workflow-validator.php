@@ -373,10 +373,10 @@ class FMW_Workflow_Validator {
                 ?? '';
 
             if ( ! empty( $form_id_to_check ) ) {
-                if ( function_exists( 'fre' ) && fre()->registry ) {
-                    if ( ! fre()->registry->exists( $form_id_to_check ) ) {
+                if ( function_exists( 'fre' ) && pforms()->registry ) {
+                    if ( ! pforms()->registry->exists( $form_id_to_check ) ) {
                         // It might be a DB-stored form rather than registered. Check forms manager.
-                        $db_form = function_exists( 'fre_get_db_form' ) ? fre_get_db_form( $form_id_to_check ) : null;
+                        $db_form = function_exists( 'pforms_get_db_form' ) ? pforms_get_db_form( $form_id_to_check ) : null;
                         if ( ! $db_form ) {
                             $errors[] = "form_id '{$form_id_to_check}' does not exist in FormEngine.";
                         }

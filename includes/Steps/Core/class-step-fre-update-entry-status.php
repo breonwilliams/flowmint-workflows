@@ -71,7 +71,7 @@ class FMW_Step_Fre_Update_Entry_Status extends FMW_Step_Base {
             );
         }
 
-        if ( ! class_exists( 'FRE_Entry' ) ) {
+        if ( ! class_exists( 'PForms_Entry' ) ) {
             throw new FMW_Step_Exception(
                 'dependency_missing',
                 'fre_update_entry_status: FormEngine is not loaded.'
@@ -79,7 +79,7 @@ class FMW_Step_Fre_Update_Entry_Status extends FMW_Step_Base {
         }
 
         $entry_id = $context->get_entry_id();
-        $repo     = new FRE_Entry();
+        $repo     = new PForms_Entry();
         $existing = $repo->get( $entry_id );
 
         if ( ! $existing ) {

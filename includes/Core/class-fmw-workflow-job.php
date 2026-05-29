@@ -132,8 +132,8 @@ class FMW_Workflow_Job {
             return $context;
         }
 
-        if ( class_exists( 'FRE_Entry' ) ) {
-            $entry_repo   = new FRE_Entry();
+        if ( class_exists( 'PForms_Entry' ) ) {
+            $entry_repo   = new PForms_Entry();
             $entry_record = $entry_repo->get( (int) $run['entry_id'] );
             if ( $entry_record ) {
                 $context->set_entry( $entry_record );

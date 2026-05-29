@@ -60,7 +60,7 @@ class FMW_Step_Fre_Get_Entry extends FMW_Step_Base {
     }
 
     public function execute( FMW_Workflow_Context $context ): array {
-        if ( ! class_exists( 'FRE_Entry' ) ) {
+        if ( ! class_exists( 'PForms_Entry' ) ) {
             throw new FMW_Step_Exception(
                 'dependency_missing',
                 'fre_get_entry: FormEngine is not loaded.'
@@ -75,7 +75,7 @@ class FMW_Step_Fre_Get_Entry extends FMW_Step_Base {
             throw new FMW_Step_Exception( 'config_error', 'fre_get_entry: invalid entry_id.' );
         }
 
-        $repo  = new FRE_Entry();
+        $repo  = new PForms_Entry();
         $entry = $repo->get( $entry_id );
 
         if ( ! $entry ) {

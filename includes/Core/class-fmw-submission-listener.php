@@ -21,7 +21,7 @@ class FMW_Submission_Listener {
     public function init() {
         // Late priority so any other fre_submission_complete listeners that
         // modify entry data have already run.
-        add_action( 'fre_submission_complete', [ $this, 'on_submission_complete' ], 100, 3 );
+        add_action( 'pforms_submission_complete', [ $this, 'on_submission_complete' ], 100, 3 );
     }
 
     /**

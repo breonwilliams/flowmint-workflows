@@ -52,7 +52,7 @@ function smoke_section( $title ) {
 /**
  * Insert a test FRE entry with a controlled created_at timestamp.
  *
- * FRE_Entry::create() always uses current_time('mysql'), so to
+ * PForms_Entry::create() always uses current_time('mysql'), so to
  * simulate an old entry we insert normally and then UPDATE
  * created_at via direct SQL.
  *
@@ -61,7 +61,7 @@ function smoke_section( $title ) {
 function smoke_make_entry( $form_id, $days_old = 0, $status = 'unread' ) {
     global $wpdb;
 
-    $repo = new FRE_Entry();
+    $repo = new PForms_Entry();
     $id   = $repo->create( $form_id, [ 'note' => "phase3 fixture: $days_old days old" ] );
 
     if ( ! is_int( $id ) || $id <= 0 ) {
@@ -113,7 +113,7 @@ function smoke_cleanup_forms( $form_ids ) {
             $fid
         ) );
         foreach ( $ids as $id ) {
-            $repo = new FRE_Entry();
+            $repo = new PForms_Entry();
             $repo->delete( (int) $id );
         }
     }
@@ -355,8 +355,8 @@ smoke_assert(
 );
 smoke_assert(
     'Delete by bare ids: entries actually gone from DB',
-    ( new FRE_Entry() )->get( $del_1 ) === null
-    && ( new FRE_Entry() )->get( $del_2 ) === null
+    ( new PForms_Entry() )->get( $del_1 ) === null
+    && ( new PForms_Entry() )->get( $del_2 ) === null
 );
 
 // 3b. Delete by entry-object array (output shape from fre_list_entries).
@@ -408,7 +408,7 @@ smoke_assert(
 
 // 3f. Per-id failure tolerance: the step must NOT throw even on
 // a partial failure. We can't easily force a real delete failure
-// without monkey-patching FRE_Entry. Skip the explicit failure
+// without monkey-patching PForms_Entry. Skip the explicit failure
 // case here — the failed[] array is exercised at the type level
 // and via the empty case.
 
@@ -466,7 +466,7 @@ smoke_assert(
 
 // Snapshot which FORM_A entries should be deleted (>= 30 days old).
 // From the fixture: id_a_old (60d), id_a_mid (35d). Not id_a_recent (5d).
-$pre_delete_present = (bool) ( new FRE_Entry() )->get( $id_a_old );
+$pre_delete_present = (bool) ( new PForms_Entry() )->get( $id_a_old );
 smoke_assert(
     'Pre-tick: 60-day FORM_A entry exists',
     $pre_delete_present
@@ -509,20 +509,20 @@ if ( ! empty( $run ) ) {
 
     smoke_assert(
         '60-day FORM_A entry was deleted by the retention sweep',
-        ( new FRE_Entry() )->get( $id_a_old ) === null
+        ( new PForms_Entry() )->get( $id_a_old ) === null
     );
     smoke_assert(
         '35-day FORM_A entry was deleted by the retention sweep',
-        ( new FRE_Entry() )->get( $id_a_mid ) === null
+        ( new PForms_Entry() )->get( $id_a_mid ) === null
     );
     smoke_assert(
         '5-day FORM_A entry was NOT deleted (under the threshold)',
-        ( new FRE_Entry() )->get( $id_a_recent ) !== null
+        ( new PForms_Entry() )->get( $id_a_recent ) !== null
     );
     smoke_assert(
         'FORM_B entries were NOT touched (workflow only targeted FORM_A)',
-        ( new FRE_Entry() )->get( $id_b_old ) !== null
-            && ( new FRE_Entry() )->get( $id_b_recent ) !== null
+        ( new PForms_Entry() )->get( $id_b_old ) !== null
+            && ( new PForms_Entry() )->get( $id_b_recent ) !== null
     );
 
     // Inspect the run's context snapshot to confirm the delete step's

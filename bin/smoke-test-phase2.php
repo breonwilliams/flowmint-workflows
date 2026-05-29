@@ -452,8 +452,8 @@ smoke_section( '8. Regression: form-triggered workflows are not touched' );
 
 // Find a real form on this install (if any), else use a stub id.
 $probe_form_id = 'phase2-probe-form';
-if ( function_exists( 'fre' ) && fre()->registry ) {
-    $forms = fre()->registry->get_all();
+if ( function_exists( 'fre' ) && pforms()->registry ) {
+    $forms = pforms()->registry->get_all();
     if ( ! empty( $forms ) ) {
         $probe_form_id = array_keys( $forms )[0];
     }

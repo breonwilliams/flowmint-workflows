@@ -42,8 +42,8 @@ class FMW_REST_Preflight {
             // value to the user so they know to enable the connector in
             // WP admin before trying to do anything else.
             'connector_enabled'      => $connector_enabled,
-            'fre_active'             => defined( 'FRE_VERSION' ),
-            'fre_version'            => defined( 'FRE_VERSION' ) ? FRE_VERSION : null,
+            'fre_active'             => defined( 'PForms_VERSION' ),
+            'fre_version'            => defined( 'PForms_VERSION' ) ? PForms_VERSION : null,
             'action_scheduler_active' => function_exists( 'as_enqueue_async_action' ),
             'authenticated_as'       => wp_get_current_user()->user_login,
             'user_capabilities'      => [

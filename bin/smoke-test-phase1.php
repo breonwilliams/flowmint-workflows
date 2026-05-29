@@ -317,8 +317,8 @@ try {
     // back to a placeholder string if no forms exist on this install
     // (validator will warn but the repo accepts the raw value).
     $candidate_form_id = 'phase1-fake-form';
-    if ( function_exists( 'fre' ) && fre()->registry ) {
-        $forms = fre()->registry->get_all();
+    if ( function_exists( 'fre' ) && pforms()->registry ) {
+        $forms = pforms()->registry->get_all();
         if ( ! empty( $forms ) ) {
             $candidate_form_id = array_keys( $forms )[0];
         }

@@ -37,8 +37,14 @@ define( 'FMW_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'FMW_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 define( 'FMW_PLUGIN_FILE', __FILE__ );
 
-// Minimum FormEngine version required.
-define( 'FMW_REQUIRED_FRE_VERSION', '1.6.0' );
+// Minimum FormEngine version required. Bumped to 1.8.0: that release
+// renamed Form Runtime Engine's symbol surface from the `fre`/`FRE_`
+// prefix to `pforms`/`PForms_` for WordPress.org compliance, and the
+// version marker FlowMint reads is now PForms_VERSION. FlowMint 0.6.1+
+// speaks the new names (pforms_submission_complete hook, PForms_Entry /
+// PForms_Entry_Query classes, pforms() accessor). Deploy FRE 1.8.0 and
+// this FlowMint build together.
+define( 'FMW_REQUIRED_FRE_VERSION', '1.8.0' );
 
 // REST namespace.
 define( 'FMW_REST_NAMESPACE', 'flowmint/v1' );
@@ -262,11 +268,11 @@ final class FlowMint_Workflows {
      * @return bool
      */
     private function dependencies_met() {
-        if ( ! defined( 'FRE_VERSION' ) ) {
+        if ( ! defined( 'PForms_VERSION' ) ) {
             return false;
         }
 
-        if ( version_compare( FRE_VERSION, FMW_REQUIRED_FRE_VERSION, '<' ) ) {
+        if ( version_compare( PForms_VERSION, FMW_REQUIRED_FRE_VERSION, '<' ) ) {
             return false;
         }
 
@@ -384,7 +390,7 @@ final class FlowMint_Workflows {
      * Show admin notices for missing/incompatible dependencies.
      */
     public function show_dependency_notices() {
-        if ( ! defined( 'FRE_VERSION' ) ) {
+        if ( ! defined( 'PForms_VERSION' ) ) {
             $this->render_notice(
                 'error',
                 __( 'FlowMint Workflows', 'flowmint-workflows' ),
@@ -393,7 +399,7 @@ final class FlowMint_Workflows {
             return;
         }
 
-        if ( version_compare( FRE_VERSION, FMW_REQUIRED_FRE_VERSION, '<' ) ) {
+        if ( version_compare( PForms_VERSION, FMW_REQUIRED_FRE_VERSION, '<' ) ) {
             $this->render_notice(
                 'error',
                 __( 'FlowMint Workflows', 'flowmint-workflows' ),
@@ -401,7 +407,7 @@ final class FlowMint_Workflows {
                     /* translators: 1: required FRE version, 2: current FRE version */
                     __( 'requires Form Runtime Engine %1$s or higher. Currently installed: %2$s.', 'flowmint-workflows' ),
                     FMW_REQUIRED_FRE_VERSION,
-                    FRE_VERSION
+                    PForms_VERSION
                 )
             );
             return;

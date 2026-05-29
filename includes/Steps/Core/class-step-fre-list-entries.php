@@ -7,7 +7,7 @@
  * in a retention workflow, but also useful for any "do something with
  * a batch of entries" pattern.
  *
- * Backed by FRE_Entry_Query (FRE 1.6.0+), so all filters compose
+ * Backed by PForms_Entry_Query (FRE 1.6.0+), so all filters compose
  * naturally with FE's own admin UI behavior.
  *
  * Returning empty result is NOT an error — it's the normal state when
@@ -134,16 +134,16 @@ class FMW_Step_Fre_List_Entries extends FMW_Step_Base {
      * @throws FMW_Step_Exception When FormEngine isn't loaded.
      */
     public function execute( FMW_Workflow_Context $context ): array {
-        if ( ! class_exists( 'FRE_Entry_Query' ) ) {
+        if ( ! class_exists( 'PForms_Entry_Query' ) ) {
             throw new FMW_Step_Exception(
                 'dependency_missing',
-                'fre_list_entries: FRE_Entry_Query class not available. FormEngine 1.6.0+ is required.'
+                'fre_list_entries: PForms_Entry_Query class not available. FormEngine 1.6.0+ is required.'
             );
         }
 
         $config = $this->config;
 
-        $query = new FRE_Entry_Query();
+        $query = new PForms_Entry_Query();
 
         // form_id filter (optional; '*' or empty means all forms)
         $form_id = isset( $config['form_id'] ) ? trim( (string) $config['form_id'] ) : '';
@@ -166,7 +166,7 @@ class FMW_Step_Fre_List_Entries extends FMW_Step_Base {
 
         // Age filter — older_than_date wins over older_than_days when both
         // are present. We compute the cutoff in site-local time because
-        // FRE_Entry::insert() stores created_at via current_time('mysql'),
+        // PForms_Entry::insert() stores created_at via current_time('mysql'),
         // which is site-local. Matching timezones avoids off-by-N-hour
         // edge cases at day boundaries.
         $cutoff_date = $this->resolve_cutoff_date( $config );
@@ -221,7 +221,7 @@ class FMW_Step_Fre_List_Entries extends FMW_Step_Base {
      */
     private function resolve_cutoff_date( array $config ) {
         if ( ! empty( $config['older_than_date'] ) ) {
-            // Take the caller's value as-is; FRE_Entry_Query::date_range()
+            // Take the caller's value as-is; PForms_Entry_Query::date_range()
             // validates and rejects malformed dates internally.
             return (string) $config['older_than_date'];
         }

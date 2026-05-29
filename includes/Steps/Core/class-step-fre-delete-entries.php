@@ -3,7 +3,7 @@
  * Step: fre_delete_entries
  *
  * Bulk-deletes FormEngine entries (and their attached files / meta) by
- * iterating FRE_Entry::delete() per id.
+ * iterating PForms_Entry::delete() per id.
  *
  * Designed for retention workflows: the typical chain is
  * fre_list_entries → fre_delete_entries.
@@ -118,10 +118,10 @@ class FMW_Step_Fre_Delete_Entries extends FMW_Step_Base {
      *                            do NOT throw.
      */
     public function execute( FMW_Workflow_Context $context ): array {
-        if ( ! class_exists( 'FRE_Entry' ) ) {
+        if ( ! class_exists( 'PForms_Entry' ) ) {
             throw new FMW_Step_Exception(
                 'dependency_missing',
-                'fre_delete_entries: FRE_Entry class not available. FormEngine 1.6.0+ is required.'
+                'fre_delete_entries: PForms_Entry class not available. FormEngine 1.6.0+ is required.'
             );
         }
 
@@ -144,7 +144,7 @@ class FMW_Step_Fre_Delete_Entries extends FMW_Step_Base {
             ];
         }
 
-        $repo = new FRE_Entry();
+        $repo = new PForms_Entry();
 
         foreach ( $ids as $id ) {
             // Per-id try/catch so one bad entry doesn't sink the batch.
@@ -162,7 +162,7 @@ class FMW_Step_Fre_Delete_Entries extends FMW_Step_Base {
                 if ( $result === false || is_wp_error( $result ) ) {
                     $message = is_wp_error( $result )
                         ? $result->get_error_message()
-                        : 'FRE_Entry::delete returned false';
+                        : 'PForms_Entry::delete returned false';
                     $failed[] = [
                         'id'    => (int) $id,
                         'error' => $message,
