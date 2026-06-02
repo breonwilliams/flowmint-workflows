@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-06-02
+
+### Fixed
+- Dependency check now treats Promptless Forms as present when either the `PForms_VERSION` constant is defined OR the `Promptless_Forms` class exists. Single-signal checks against the constant were observed to false-positive on certain managed-host environments (Bluehost's stack in testing) where the constant was not defined at `admin_notices` time despite Promptless Forms being active and the admin pages rendering correctly. The class fallback closes that gap so FlowMint stops showing a spurious "missing dependency" error when its prerequisite plugin is actually present and working. Version-compare enforcement still requires the constant — when only the class is detectable we accept "present" and let any real version mismatch surface as step-run failures in run history rather than as a blanket block.
+
+### Changed
+- User-facing admin notices and the plugin Description header updated from "Form Runtime Engine" to "Promptless Forms" — Promptless Forms shipped on WordPress.org at the renamed slug in v1.8.0 and FlowMint's surface text was still pointing at the legacy name.
+- Internal symbol surface (`FMW_REQUIRED_FRE_VERSION` constant, `FormEngine` step categories, internal class names referencing `Fre`) is unchanged — those are internal-only and renaming would invalidate stored workflow JSON without behavioral benefit. Only user-visible strings were touched.
+
+### Notes
+- No database schema changes; `FMW_DB_VERSION` unchanged at 0.3.0.
+- Minimum required Promptless Forms version unchanged at 1.8.0.
+
 ## [0.6.1] — 2026-05-17
 
 ### Changed

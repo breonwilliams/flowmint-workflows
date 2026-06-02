@@ -2,8 +2,8 @@
 /**
  * Plugin Name: FlowMint Workflows
  * Plugin URI: https://flowmint.dev
- * Description: Async workflow runtime that orchestrates form submissions and recurring schedules through configurable pipelines (Drive, Printavo, Email, HTTP, FE retention, etc.). Companion plugin to Form Runtime Engine.
- * Version: 0.6.1
+ * Description: Async workflow runtime that orchestrates form submissions and recurring schedules through configurable pipelines (Drive, Printavo, Email, HTTP, FE retention, etc.). Companion plugin to Promptless Forms.
+ * Version: 0.6.2
  * Requires at least: 5.0
  * Requires PHP: 7.4
  * Author: FlowMint
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin version.
-define( 'FMW_VERSION', '0.6.1' );
+define( 'FMW_VERSION', '0.6.2' );
 
 // Database schema version. Bump when DDL changes; triggers migration.
 //
@@ -265,14 +265,38 @@ final class FlowMint_Workflows {
     /**
      * Check whether all dependencies are met.
      *
+     * Multi-signal: Promptless Forms is considered present when EITHER
+     * the `PForms_VERSION` constant is defined OR the `Promptless_Forms`
+     * class exists. The constant is the primary signal (defined at the
+     * top of Promptless Forms' main file, before anything else loads),
+     * but environment-specific edge cases (opcode caches, certain
+     * managed-host bootstrap quirks, plugins that load before their
+     * dependents) have been seen to leave the constant absent at
+     * `admin_notices` time while the class IS loaded. The class fallback
+     * keeps FlowMint from showing a spurious "missing dependency" notice
+     * when Promptless Forms is actually present and working.
+     *
+     * Version check still requires the constant — when the constant is
+     * missing we accept "present" but can't enforce a minimum version.
+     * That's a conservative trade-off: better to allow workflows to run
+     * than to block them on a check that the constant absence prevents
+     * us from completing accurately. If a real version mismatch causes
+     * step failures, those surface in run history rather than as a
+     * silent block.
+     *
      * @return bool
      */
     private function dependencies_met() {
-        if ( ! defined( 'PForms_VERSION' ) ) {
+        $has_constant = defined( 'PForms_VERSION' );
+        $has_class    = class_exists( 'Promptless_Forms' );
+
+        // No signal at all → Promptless Forms is not present.
+        if ( ! $has_constant && ! $has_class ) {
             return false;
         }
 
-        if ( version_compare( PForms_VERSION, FMW_REQUIRED_FRE_VERSION, '<' ) ) {
+        // Constant present → enforce minimum version.
+        if ( $has_constant && version_compare( PForms_VERSION, FMW_REQUIRED_FRE_VERSION, '<' ) ) {
             return false;
         }
 
@@ -388,24 +412,38 @@ final class FlowMint_Workflows {
 
     /**
      * Show admin notices for missing/incompatible dependencies.
+     *
+     * Mirrors the multi-signal logic in dependencies_met(): treat
+     * Promptless Forms as present when EITHER the `PForms_VERSION`
+     * constant is defined OR the `Promptless_Forms` class exists.
+     * Only show the "missing dependency" notice when neither signal
+     * is present. This avoids the spurious error notice when an
+     * environment leaves the constant absent at admin_notices time
+     * even though Promptless Forms is loaded and working.
      */
     public function show_dependency_notices() {
-        if ( ! defined( 'PForms_VERSION' ) ) {
+        $has_constant = defined( 'PForms_VERSION' );
+        $has_class    = class_exists( 'Promptless_Forms' );
+
+        if ( ! $has_constant && ! $has_class ) {
             $this->render_notice(
                 'error',
                 __( 'FlowMint Workflows', 'flowmint-workflows' ),
-                __( 'requires Form Runtime Engine to be installed and activated.', 'flowmint-workflows' )
+                __( 'requires Promptless Forms to be installed and activated.', 'flowmint-workflows' )
             );
             return;
         }
 
-        if ( version_compare( PForms_VERSION, FMW_REQUIRED_FRE_VERSION, '<' ) ) {
+        // Version check only runs when the constant is available — when
+        // only the class is detectable we can't compare versions, so we
+        // skip the check rather than warn on incomplete information.
+        if ( $has_constant && version_compare( PForms_VERSION, FMW_REQUIRED_FRE_VERSION, '<' ) ) {
             $this->render_notice(
                 'error',
                 __( 'FlowMint Workflows', 'flowmint-workflows' ),
                 sprintf(
-                    /* translators: 1: required FRE version, 2: current FRE version */
-                    __( 'requires Form Runtime Engine %1$s or higher. Currently installed: %2$s.', 'flowmint-workflows' ),
+                    /* translators: 1: required Promptless Forms version, 2: current Promptless Forms version */
+                    __( 'requires Promptless Forms %1$s or higher. Currently installed: %2$s.', 'flowmint-workflows' ),
                     FMW_REQUIRED_FRE_VERSION,
                     PForms_VERSION
                 )
