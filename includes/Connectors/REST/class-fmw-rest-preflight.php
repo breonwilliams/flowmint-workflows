@@ -61,6 +61,35 @@ class FMW_REST_Preflight {
             // ['form']; v0.6.0+ reports both.
             'supported_trigger_types' => [ 'form', 'schedule' ],
             'schema_document_url' => FMW_PLUGIN_URL . 'docs/CONNECTOR_API.md',
+            // Top-level namespaces accessible via `{{ … }}` interpolation
+            // in any string field of any step config. Added in v0.6.3
+            // after pressure testing surfaced that agents were guessing
+            // variable paths (e.g. `entry.fields.email`) and getting
+            // silent empty-string substitutions, because the interpolator
+            // resolves missing paths to '' rather than leaving the
+            // literal markers. The actual root namespace for form data
+            // is `data.*`. This block documents every namespace the
+            // workflow context exposes so the next MCP session doesn't
+            // hit the same trap. See FMW_Workflow_Context::get_root() for
+            // the authoritative source.
+            'context_shape' => [
+                'description'  => 'Top-level namespaces accessible via {{ … }} interpolation in any string field of any step config. Use these paths everywhere a step takes a string (subject, body, message, to, url, headers, etc.).',
+                'namespaces'   => [
+                    'data'        => 'Form submission field values, keyed by field key. Example: {{ data.email }}, {{ data.name }}, {{ data.preferred_track }}. This is the most common namespace — use it for form data. Missing keys resolve to empty string, not the literal marker.',
+                    'entry'       => 'Promptless Forms entry RECORD metadata (id, form_id, status, ip_address, created_at, updated_at). Example: {{ entry.id }}, {{ entry.created_at }}. Does NOT contain field values — those are at data.*. Common mistake: writing {{ entry.fields.email }} expecting the submission email; the correct path is {{ data.email }}.',
+                    'entry_files' => 'Array of uploaded files. Each item is an object with { field_key, file_name, file_url, file_path, file_size, mime_type }. Prefer the typed file step types (fre_get_file, drive_upload_file) over direct iteration where possible.',
+                    'run'         => 'Current workflow run: { id, started_at }. Example: {{ run.id }} in a log message for traceability.',
+                    'workflow'    => 'Workflow metadata: { id }. Example: {{ workflow.id }} when one log line covers many workflows.',
+                    'form'        => 'Bound form metadata: { id }. Example: {{ form.id }} when the same listener handles multiple forms.',
+                    'steps'       => 'Outputs from prior steps, keyed by step NAME (not type, not index). Example: {{ steps.find_customer.contact_id }} after a step `{ name: "find_customer", type: "printavo_find_or_create_customer" }`. See each step type\'s output_schema in flowmint_list_step_types for available output fields.',
+                    'vars'        => 'Variables set via the `set_variable` step. Example: {{ vars.discount_pct }} after `{ name: "set_discount", type: "set_variable", config: { name: "discount_pct", value: 0.15 } }`.',
+                ],
+                'example'      => 'Send a confirmation email: { "to": "{{ data.email }}", "subject": "Welcome {{ data.name }} — order {{ entry.id }}", "body": "We received your registration for the {{ data.preferred_track }} track on {{ entry.created_at }}." }',
+                'common_traps' => [
+                    'entry.fields.* does NOT exist. Form fields are at data.*. The interpolator silently resolves missing paths to empty string, so the step succeeds with empty content rather than failing loudly.',
+                    'steps.<type>.* does NOT work. Use the step NAME, not the type: `{{ steps.find_customer.contact_id }}` not `{{ steps.printavo_find_or_create_customer.contact_id }}`.',
+                ],
+            ],
             'diagnostics' => [
                 'stored_plugin_version' => get_option( 'fmw_db_version', '0.0.0' ),
                 'database_health' => [

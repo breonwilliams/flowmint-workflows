@@ -158,6 +158,28 @@ class FMW_REST_Workflows {
                 [ 'id' => $id ],
                 $body
             );
+
+            // Preserve-existing semantics for trigger inference: the MCP
+            // tool description (and the REST contract generally) says
+            // "omitted fields retain their current values." If the caller
+            // omits form_id from the body but supplies a new config
+            // without a trigger block, the validator's wrapper-form_id
+            // → trigger inference (validator.php:348-354) has nothing to
+            // work with and fails with "Missing required field: trigger".
+            // That contradicts the "omitted = preserve" contract. So when
+            // the body lacks form_id, pull the existing workflow's
+            // form_id from the database and inject it into the
+            // validation payload — making update() behave symmetrically
+            // with create() when both are given a config that lacks an
+            // explicit trigger block. Added in v0.6.3 after pressure
+            // testing surfaced the asymmetry.
+            if ( empty( $for_validation['form_id'] ) ) {
+                $existing = FMW_Workflow_Repository::get( $id );
+                if ( $existing && ! empty( $existing['form_id'] ) ) {
+                    $for_validation['form_id'] = $existing['form_id'];
+                }
+            }
+
             $validation = FMW_Workflow_Validator::validate_full( $for_validation );
             if ( ! $validation['valid'] ) {
                 return FMW_REST_Auth::error( 'invalid_workflow', 'Workflow validation failed.', 400, [

@@ -373,16 +373,23 @@ class FMW_Workflow_Validator {
                 ?? '';
 
             if ( ! empty( $form_id_to_check ) ) {
-                if ( function_exists( 'fre' ) && pforms()->registry ) {
+                // Promptless Forms exposes its plugin instance via the
+                // `pforms()` accessor. The legacy name was `fre()` before
+                // the v1.8.0 rename — this guard was checking the legacy
+                // function name and silently fell through to the "not
+                // loaded" warning even when Promptless Forms was present
+                // and the registry was queryable. Caught during pressure
+                // testing v0.6.3.
+                if ( function_exists( 'pforms' ) && pforms()->registry ) {
                     if ( ! pforms()->registry->exists( $form_id_to_check ) ) {
                         // It might be a DB-stored form rather than registered. Check forms manager.
                         $db_form = function_exists( 'pforms_get_db_form' ) ? pforms_get_db_form( $form_id_to_check ) : null;
                         if ( ! $db_form ) {
-                            $errors[] = "form_id '{$form_id_to_check}' does not exist in FormEngine.";
+                            $errors[] = "form_id '{$form_id_to_check}' does not exist in Promptless Forms.";
                         }
                     }
                 } else {
-                    $warnings[] = 'FormEngine not loaded — could not verify form_id existence.';
+                    $warnings[] = 'Promptless Forms not loaded — could not verify form_id existence.';
                 }
             }
         }

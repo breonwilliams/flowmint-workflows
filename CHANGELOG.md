@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-06-02
+
+### Fixed
+- **Stale rename guard in workflow validator** — `FMW_Workflow_Validator::validate_full()` was checking `function_exists( 'fre' )` before consulting the Promptless Forms registry to verify form_id existence. The function was renamed `fre()` → `pforms()` in PForms v1.8.0; the guard was checking the legacy name. Every form-id existence check silently fell through to the "FormEngine not loaded" warning even when Promptless Forms was present and the registry was queryable. Now checks `function_exists( 'pforms' )`. Caught during pressure testing.
+- **Update endpoint dropped trigger inference when caller omitted form_id** — `FMW_REST_Workflows::update()` did not pre-fetch the existing workflow's form_id before re-validating, so a PATCH that supplied a new config without an explicit trigger block — but expected the existing form binding to be preserved per the standard REST "omitted = unchanged" contract — failed with `Missing required field: trigger`. Now pulls the existing form_id from the database and injects it into the validation payload, making update() symmetric with create() when both receive a config that lacks an explicit trigger.
+
+### Changed (documentation / DX)
+- **MCP connector descriptions corrected on step shape** — `flowmint-connector.js` step shape descriptions said `{ id, type, config, on_error?, when? }` but the validator requires `name`, not `id`. Two description strings updated to `{ name, type, config, on_error?, when? }` so first-time workflow creates don't fail with a confusing "missing or invalid 'name'" error. **Important for users on existing connector installs:** the connector JS lives at `~/flowmint-mcp/flowmint-connector.js` on each Mac, downloaded by the connector setup command. Updating the plugin does NOT update the local copy. Re-run the connector setup command from WP admin → FlowMint Workflows → Claude Connection to pull the corrected descriptions.
+- **Preflight response now documents the workflow context shape** — added a `context_shape` block listing every top-level namespace accessible via `{{ … }}` interpolation (`data`, `entry`, `entry_files`, `run`, `workflow`, `form`, `steps`, `vars`), with descriptions, an example, and a `common_traps` list calling out the two patterns that produce silent empty-string substitutions: `entry.fields.*` (form fields are at `data.*`, not `entry.fields.*`) and `steps.<type>.*` (use the step NAME, not the type). Resolves the friction that surfaced during pressure testing of `session_registration` → `session_registration_confirmation`, where guessed interpolation paths produced an empty `to` field in the email step and a generic `config_error`.
+- **MCP tool description now references current names** — `flowmint_create_workflow` description previously referred to "fre_submission_complete" (the legacy hook name) and "an FRE form". Updated to "pforms_submission_complete" and "Promptless Forms" to match the v0.6.2 rename. No behavior change.
+
+### Notes
+- No database schema changes. `FMW_DB_VERSION` unchanged at `0.3.0`.
+- Minimum required Promptless Forms version unchanged at 1.8.0.
+- Internal symbol surface (`FMW_*` classes, `fmw_*` actions/filters, `pforms_submission_complete` hook listener wiring) unchanged.
+
 ## [0.6.2] — 2026-06-02
 
 ### Fixed
