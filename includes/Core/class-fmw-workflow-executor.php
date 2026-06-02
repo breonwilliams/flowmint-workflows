@@ -78,8 +78,22 @@ class FMW_Workflow_Executor {
             $raw_config        = $step_def['config'] ?? [];
             $interpolated_config = $interp->interpolate( $raw_config );
 
-            // Build the step instance.
-            $step_def_with_interpolated_config = array_merge( $step_def, [ 'config' => $interpolated_config ] );
+            // Build the step instance. Pass BOTH the interpolated config (for
+            // most step types — they want the resolved values) AND the raw
+            // config (for control-flow steps whose config contains
+            // expression-typed fields or nested step lists that must be
+            // interpolated per-iteration). Conditional reads raw_config['if']
+            // so the comparison operators survive into the expression
+            // evaluator instead of being pre-resolved (and mangled) by the
+            // string interpolator. Added in v0.6.4 after pressure testing
+            // proved the previous "Workaround" comment in the conditional
+            // step was hiding a real bug — every conditional was taking the
+            // else branch regardless of the if value, because the if string
+            // was empty/garbage by the time the step received it.
+            $step_def_with_interpolated_config = array_merge( $step_def, [
+                'config'     => $interpolated_config,
+                'raw_config' => $raw_config,
+            ] );
 
             /** @var FMW_Step_Base $step */
             $step = new $class( $step_def_with_interpolated_config );

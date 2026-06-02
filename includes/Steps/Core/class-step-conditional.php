@@ -56,26 +56,37 @@ class FMW_Step_Conditional extends FMW_Step_Base {
     }
 
     public function execute( FMW_Workflow_Context $context ): array {
-        if ( ! isset( $this->config['if'] ) ) {
+        // Use raw_config['if'] — the pre-interpolation expression text — so
+        // comparison operators (==, !=, <=, etc.) survive into the
+        // expression evaluator. The interpolated $config['if'] is unusable
+        // here: the string interpolator doesn't understand expressions, so
+        // `{{ data.urgency == 'high' }}` came out empty/garbage and every
+        // conditional took the else branch. Fixed in v0.6.4 after pressure
+        // testing exposed the bug. The previous code had a "Workaround"
+        // comment admitting it didn't actually work; this is the real fix.
+        if ( ! isset( $this->raw_config['if'] ) ) {
             throw new FMW_Step_Exception( 'config_error', "conditional: 'if' is required." );
         }
 
         $interp = new FMW_Interpolator( $context );
         $expr   = new FMW_Expression( $interp );
 
-        // 'if' was already interpolated by the executor — but the interpolator
-        // may have stringified the result. We re-evaluate by passing the raw
-        // expression text through the expression evaluator.
-        // To do this, we need the RAW expression text. The executor passed us
-        // the interpolated config. So we read the raw expression from the
-        // step definition pre-interpolation. Workaround: evaluate against the
-        // already-interpolated string as a simple truthy check.
-        $raw_if = $this->config['if'];
+        // Evaluate the raw expression. The expression evaluator builds its
+        // own interpolator pass internally to resolve {{ … }} blocks that
+        // contain context paths, then runs the comparison/logical
+        // operators on top of those resolved values.
+        $raw_if      = $this->raw_config['if'];
         $cond_result = $expr->evaluate( $raw_if );
 
+        // Pull branch step lists from raw_config too so nested conditionals
+        // inside `then` or `else` also receive their `if` field
+        // un-interpolated. Without this, a workflow nesting conditional
+        // inside conditional would re-introduce the original bug at the
+        // inner level. Fall back to $this->config for backward compat with
+        // any direct-instantiation callers that didn't pass raw_config.
         $branch_steps = $cond_result
-            ? ( $this->config['then'] ?? [] )
-            : ( $this->config['else'] ?? [] );
+            ? ( $this->raw_config['then'] ?? $this->config['then'] ?? [] )
+            : ( $this->raw_config['else'] ?? $this->config['else'] ?? [] );
 
         if ( ! is_array( $branch_steps ) ) {
             $branch_steps = [];

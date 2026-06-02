@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.4] — 2026-06-02
+
+### Fixed
+- **Conditional step took the else branch every time, regardless of the `if` expression.** `FMW_Step_Conditional::execute()` was reading `$this->config['if']` — i.e. the POST-interpolation config the executor passed in. The executor runs the entire step config through `FMW_Interpolator::interpolate()` before instantiating the step, including the conditional's `if` field. Since the interpolator only understands `{{ context.path }}` substitution and has no concept of comparison/logical operators, an expression like `{{ data.urgency == 'high' }}` came out as an empty string by the time it reached the conditional step. `FMW_Expression::evaluate('')` correctly returns false, so every conditional silently took the else branch. The previous code carried a `// Workaround: ...` comment in the step that explicitly admitted the implementation didn't work — it shipped anyway. Caught during pressure testing of a real urgency-routing workflow that submitted two entries with different `urgency` values, both produced identical branch behavior.
+
+  The fix plumbs the RAW (pre-interpolation) config through alongside the interpolated one:
+  - `FMW_Step_Base` gains a `$raw_config` property, populated from `$step_definition['raw_config']` and falling back to `$this->config` for backward compat with any direct-instantiation callers.
+  - `FMW_Workflow_Executor` includes `'raw_config' => $raw_config` in the step definition it constructs.
+  - `FMW_Step_Conditional` reads `$this->raw_config['if']` for the expression. Comparison operators now survive into the expression evaluator, which builds its own interpolator pass to resolve the `{{ context.path }}` blocks correctly.
+  - `FMW_Step_Conditional` also pulls `then` / `else` step arrays from raw_config when available, so a nested conditional inside a `then` branch gets its own `if` field un-interpolated. Without this, the nested-conditional case would reintroduce the bug at the inner level.
+
+### Notes
+- No database schema changes. `FMW_DB_VERSION` unchanged at `0.3.0`.
+- No new step types, no API changes.
+- Existing non-conditional workflows are unaffected — they continue to read `$this->config`, which still receives the same pre-interpolated values it always has.
+- `skip_if` clauses (the FMW_Expression docblock mentions them) and the `try_catch` step both also use the expression evaluator. `skip_if` was not exercised by pressure testing and may or may not have the same drift; will be audited separately. `try_catch`'s nested `try`/`catch` arrays contain step definitions that re-enter the executor, so they're not affected by this fix one way or the other.
+
 ## [0.6.3] — 2026-06-02
 
 ### Fixed

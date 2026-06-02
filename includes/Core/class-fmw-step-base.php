@@ -30,6 +30,31 @@ abstract class FMW_Step_Base {
     protected $config;
 
     /**
+     * Step's raw config (BEFORE interpolation). Same shape as $config, but
+     * string values still contain unresolved `{{ … }}` markers and any
+     * expression-typed fields (such as the conditional step's `if`) are
+     * still parseable as expressions.
+     *
+     * Most step types should keep using $config — it has variables already
+     * substituted, which is what nearly every step wants. The exceptions
+     * are control-flow steps whose config contains expressions or nested
+     * step lists that must be deferred to their own per-iteration
+     * interpolation pass:
+     *
+     *   - conditional: read $raw_config['if'] for the expression, and
+     *     $raw_config['then'] / $raw_config['else'] for nested step arrays
+     *     so nested conditionals get their `if` raw too.
+     *   - try_catch (if/when added): same pattern for any future
+     *     expression-typed fields.
+     *
+     * Falls back to $config when the executor doesn't pass raw_config —
+     * preserves backward compat for any direct instantiation path.
+     *
+     * @var array
+     */
+    protected $raw_config;
+
+    /**
      * Per-step error policy: 'fail', 'continue', 'retry'.
      *
      * @var string
@@ -40,12 +65,15 @@ abstract class FMW_Step_Base {
      * Constructor.
      *
      * @param array $step_definition The full step definition from the workflow JSON.
-     *                                Must include 'name', 'config'. Optional: 'on_error'.
+     *                                Must include 'name', 'config'. Optional: 'on_error',
+     *                                'raw_config' (control-flow steps that need
+     *                                pre-interpolation access).
      */
     public function __construct( array $step_definition ) {
-        $this->step_name = isset( $step_definition['name'] ) ? (string) $step_definition['name'] : '';
-        $this->config    = isset( $step_definition['config'] ) ? (array) $step_definition['config'] : [];
-        $this->on_error  = isset( $step_definition['on_error'] ) ? (string) $step_definition['on_error'] : 'fail';
+        $this->step_name  = isset( $step_definition['name'] ) ? (string) $step_definition['name'] : '';
+        $this->config     = isset( $step_definition['config'] ) ? (array) $step_definition['config'] : [];
+        $this->raw_config = isset( $step_definition['raw_config'] ) ? (array) $step_definition['raw_config'] : $this->config;
+        $this->on_error   = isset( $step_definition['on_error'] ) ? (string) $step_definition['on_error'] : 'fail';
     }
 
     /**
