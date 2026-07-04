@@ -1,6 +1,6 @@
 # FlowMint Workflows — AI Reference
 
-**Status (as of 2026-05-15, version 0.6.0):** v0.6.0 adds **scheduled workflow triggers** as a first-class capability — workflows can now fire on a recurring schedule (`hourly` / `twicedaily` / `daily` / `weekly`) in addition to the existing form-submission trigger. The motivating use case was a daily FRE entry retention sweep for 725 Print Lab, but the underlying trigger abstraction is general-purpose. Phases 1–3 complete with 99/99 smoke checks green; Phase 4 packaging complete, 725 production verified. **Read `docs/DESIGN_SCHEDULED_TRIGGERS.md` for the engineering contract and `docs/SCHEDULED_WORKFLOWS.md` for the user-facing guide.** All v0.5.x guarantees still hold — existing form-triggered workflows run unchanged. Phases 0–3 of the original v1.0 plan remain fully complete; v0.5.0's Claude Cowork MCP connector ships unchanged. **READ `docs/TROUBLESHOOTING.md` BEFORE adding a new connector or onboarding a new client** — it captures every gotcha the first 725 deployment surfaced (Printavo schema migration, GraphQL variables encoding, GoDaddy SMTP block, Drive service-account quota, etc.).
+**Status (as of 2026-07-04, version 0.6.4):** FlowMint is a **fully implemented, shipping plugin** — the "planning phase" language further down this doc is historical (see the corrected phase table and footer). v0.6.4's notable fix: control-flow steps (`conditional`) read pre-interpolation `raw_config` so comparison expressions aren't mangled by the interpolator. **FRE integration note:** FRE 1.8.0 renamed its PHP surface to `pforms_*` — FlowMint listens to `pforms_submission_complete` and uses `PForms_Entry`; any `fre_*` hook names appearing in older docs/comments refer to the pre-rename era. v0.6.0 added **scheduled workflow triggers** as a first-class capability — workflows can now fire on a recurring schedule (`hourly` / `twicedaily` / `daily` / `weekly`) in addition to the existing form-submission trigger. The motivating use case was a daily FRE entry retention sweep for 725 Print Lab, but the underlying trigger abstraction is general-purpose. Phases 1–3 complete with 99/99 smoke checks green; Phase 4 packaging complete, 725 production verified. **Read `docs/DESIGN_SCHEDULED_TRIGGERS.md` for the engineering contract and `docs/SCHEDULED_WORKFLOWS.md` for the user-facing guide.** All v0.5.x guarantees still hold — existing form-triggered workflows run unchanged. Phases 0–3 of the original v1.0 plan remain fully complete; v0.5.0's Claude Cowork MCP connector ships unchanged. **READ `docs/TROUBLESHOOTING.md` BEFORE adding a new connector or onboarding a new client** — it captures every gotcha the first 725 deployment surfaced (Printavo schema migration, GraphQL variables encoding, GoDaddy SMTP block, Drive service-account quota, etc.).
 
 > **🗓️ Scheduled triggers (v0.6.0):** Workflows declare a `trigger` block in their config JSON. `{ type: "form", form_id: "…" }` is the existing form-triggered shape (pre-v0.6 workflows are normalized into this transparently). `{ type: "schedule", interval: "daily", hour: 2, minute: 0 }` is the new recurring shape. Scheduled runs use `entry_id = 0` and `form_id = ''` sentinels because they have no FE entry context. The schedule listener (`FMW_Schedule_Listener`) wires save/disable/delete hooks to register/unregister AS recurring events; a daily reconciliation action handles drift. Two new step types (`fre_list_entries`, `fre_delete_entries`) make the entry retention use case viable. Database schema bumped to v0.2.0 — additive ALTER (nullable `form_id` + new `trigger_type` column with composite index). Migration is idempotent and reversible.
 
@@ -17,7 +17,7 @@ A WordPress plugin that turns FormEngine submissions into multi-step workflows �
 
 ## What this plugin IS
 
-- An async workflow runtime that listens to `fre_submission_complete` (FormEngine's post-submission action)
+- An async workflow runtime that listens to `pforms_submission_complete` (FormEngine's post-submission action; named `fre_submission_complete` before FRE 1.8.0)
 - A library of reusable "steps" — pluggable units that do one thing each (find a Drive folder, upload a file, create a Printavo Quote, send an email)
 - A workflow registry where each form_id can be wired to a workflow definition (JSON, stored in DB)
 - A connector REST API + MCP tool layer so workflows can be created and managed by AI tools (Claude) the same way FormEngine forms are
@@ -38,7 +38,7 @@ A WordPress plugin that turns FormEngine submissions into multi-step workflows �
 | WordPress | 5.0+ | |
 | PHP | 7.4+ | Type hints, arrow functions, null coalescing |
 | MySQL | 5.6+ / MariaDB 10.0+ | InnoDB required (transactional integrity for run history) |
-| Form Runtime Engine | 1.6.0+ | Hard dependency — admin notice if missing |
+| Form Runtime Engine (Promptless Forms) | 1.8.0+ (`FMW_REQUIRED_FRE_VERSION`) | Hard dependency — admin notice if missing. 1.8.0 minimum because that release renamed FRE's PHP surface to `pforms_*`/`PForms_*` |
 | Action Scheduler | bundled | Used for async job processing; bundled in vendor/ |
 
 ## Documentation map
@@ -69,7 +69,7 @@ The full docs live in `docs/`. Read in roughly this order:
         ↓
 [ FormEngine: validate, sanitize, store entry, attach files ]
         ↓
-[ fre_submission_complete action fires ]
+[ pforms_submission_complete action fires ]
         ↓
 [ FlowMint Workflows listener: find workflow for form_id ]
         ↓
@@ -90,7 +90,7 @@ The full docs live in `docs/`. Read in roughly this order:
 [ Run history: success ]
 ```
 
-If any step fails, Action Scheduler retries with exponential backoff. After max retries, the run is marked failed and a notification fires to FlowMint (Slack/email). Failed runs are visible in the admin UI and can be manually replayed.
+If any step fails, Action Scheduler retries with exponential backoff (workflow-level retry, default max 3, via `FMW_Workflow_Job::handle_failure()`). After max retries the run is marked failed and `fmw_workflow_run_failed` fires. **⚠️ Honest status: no Slack/email failure notification is implemented yet** — there is no `FMW_Slack_Client` in the codebase (`docs/SETUP_SLACK.md` is aspirational), so failed runs are only visible in the admin UI (and replayable there). Wiring a notifier to `fmw_workflow_run_failed` is a known small-feature gap.
 
 ## Plugin file structure
 
@@ -104,10 +104,11 @@ flowmint-workflows/
   includes/
     Core/                      # Workflow engine, executor, context, registry
     Steps/                     # Step library — one class per step type
-    Connectors/                # External service clients (Drive, Printavo, etc.)
-    Database/                  # DB schema, migrations, repositories
-    Mcp/                       # MCP tool surface
-    Admin/                     # Admin UI (run history, settings)
+    Connectors/                # External service clients (Drive, Printavo, Email, Http)
+    Connectors/REST/           # Connector REST controllers (flowmint/v1/connector/*)
+    Connectors/MCP/            # Connector admin page + assets/flowmint-connector.js (16-tool stdio MCP server — there is NO includes/Mcp/ PHP dir)
+    Database/                  # DB schema, migrations, repositories, encrypted credential store
+    Admin/                     # Admin UI (run history, replay)
   assets/                      # CSS/JS for admin UI
   languages/                   # i18n
   tests/
@@ -120,7 +121,7 @@ flowmint-workflows/
   uninstall.php                # Cleanup on plugin deletion
 ```
 
-Phase 1 of the build creates everything under `includes/` and `assets/`. Phases 2-5 add specific step categories and polish.
+All of the above is built and shipping (65 PHP class files under includes/ as of v0.6.4).
 
 ## Companion to FormEngine, not a fork
 
@@ -146,12 +147,14 @@ FlowMint Workflows DEPENDS ON Form Runtime Engine but lives as a separate plugin
 
 | Phase | Description | Hours est | Status |
 |---|---|---|---|
-| 0 | Planning + scaffolding + design docs | 3 | **In progress** |
-| 1 | Foundation (engine, DB, base steps, connector, MCP) | 14 | Not started |
-| 2 | Drive + Email integrations | 10 | Not started |
-| 3 | Printavo + HTTP integrations | 8 | Not started |
-| 4 | 725 Print Lab migration | 6 | Not started |
-| 5 | Production polish | 12 | Not started |
+| 0 | Planning + scaffolding + design docs | 3 | ✅ Complete |
+| 1 | Foundation (engine, DB, base steps, connector, MCP) | 14 | ✅ Complete |
+| 2 | Drive + Email integrations | 10 | ✅ Complete |
+| 3 | Printavo + HTTP integrations | 8 | ✅ Complete |
+| 4 | 725 Print Lab migration | 6 | ✅ Complete (725 production verified) |
+| 5 | Production polish | 12 | ✅ Complete through v0.6.4 (28 step types, scheduled triggers, encrypted credential store) |
+
+Known gaps as of v0.6.4: no `FMW_Slack_Client` (Slack failure notifications documented but unbuilt), no `includes/Mcp/` PHP layer (superseded by the JS stdio connector under `includes/Connectors/MCP/`).
 
 See `docs/ROADMAP.md` for detail on each phase.
 
@@ -172,8 +175,8 @@ These are documented in detail in `docs/ARCHITECTURE.md`. Quick summary:
 
 ## Critical guardrails for AI sessions working on this plugin
 
-- **Plugin is in PLANNING PHASE.** Do not write Phase 1+ code without explicit confirmation from Breon. The docs in `docs/` are the contract; Phase 1 build implements them.
-- **Do not modify FormEngine to integrate with this plugin.** FormEngine should not know FlowMint Workflows exists. Use only documented FRE hooks (`fre_submission_complete`, `fre_entry_created`, etc.) and public classes (`FRE_Entry`).
+- **Plugin is IN PRODUCTION (v0.6.4, 725 Print Lab live).** Changes must not break running workflows: existing form-triggered workflows and their JSON configs are a compatibility contract. Schema changes require an `FMW_DB_VERSION` bump with an idempotent migration; step-config shape changes require normalization for stored definitions.
+- **Do not modify FormEngine to integrate with this plugin.** FormEngine should not know FlowMint Workflows exists. Use only documented FRE hooks (`pforms_submission_complete`, `pforms_entry_created`, etc. — `pforms_*` since FRE 1.8.0) and public classes (`PForms_Entry`).
 - **Workflow JSON is the source of truth, not PHP files.** Workflow definitions live in the DB, created via the connector REST API or MCP tools. PHP "workflow definitions" only exist in tests and reference examples.
 - **Steps must be deterministic for a given context.** A step's execution should depend only on its config and the current run context. No global state, no static caches that survive across runs.
 - **Async execution is mandatory.** Never block the form submission to wait for workflow completion. Action Scheduler is the only execution path in v1.
@@ -187,12 +190,12 @@ These are documented in detail in `docs/ARCHITECTURE.md`. Quick summary:
 
 Special considerations FlowMint releases require:
 
-- **FRE dependency check.** FlowMint requires `FMW_REQUIRED_FRE_VERSION` (currently 1.6.0). Bumping that constant is a breaking change; coordinate with FRE's release cadence.
-- **Database schema version.** Schema-affecting changes must also bump `FMW_DB_VERSION` to trigger the migration on next load — separate from the plugin version.
+- **FRE dependency check.** FlowMint requires `FMW_REQUIRED_FRE_VERSION` (currently 1.8.0 — the FRE release that renamed its surface to `pforms_*`). Bumping that constant is a breaking change; coordinate with FRE's release cadence.
+- **Database schema version.** Schema-affecting changes must bump `FMW_DB_VERSION` to trigger the migration on next load — separate from the plugin version. The version is ALSO legitimately bumped without any DDL change to fire one-time idempotent upgrade tasks on existing sites (e.g. 0.3.0 exists solely to re-grant the `flowmint_manage_workflows` capability — there is intentionally no `migrate_to_0_3_0()`; see the constant's comment block in `flowmint-workflows.php`).
 - **Vendor dir.** The build script runs `composer install --no-dev` inside the staged copy; Composer must be on PATH or the ZIP will ship with dev dependencies (or no vendor/ at all).
 
 **One-line summary:** update version stamps in `flowmint-workflows.php` (header + `FMW_VERSION` constant), `readme.txt` (Stable tag + Upgrade Notice), and `CHANGELOG.md` → commit → `git tag v0.6.0` → `git push --tags` → `./bin/build-release.sh` → `gh release create v0.6.0 build/flowmint-workflows.zip --notes-file CHANGELOG.md`.
 
 ---
 
-**Plugin status:** scaffolding complete, design docs in progress, no runtime code yet. See `docs/ROADMAP.md` for what comes next.
+**Plugin status:** v0.6.4 in production (725 Print Lab live). All build phases complete: workflow engine, 28 step types, form + scheduled triggers, Drive/Printavo/Email/HTTP connectors, encrypted credential store, connector REST API + 16-tool MCP server, run-history admin UI with replay. Known gaps: Slack failure notifications (unbuilt), test coverage expansion. This line previously said "no runtime code yet" — that was stale planning-phase text; corrected 2026-07-04.

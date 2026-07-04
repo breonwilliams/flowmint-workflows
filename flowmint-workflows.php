@@ -24,11 +24,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Plugin version.
 define( 'FMW_VERSION', '0.6.4' );
 
-// Database schema version. Bump when DDL changes; triggers migration.
+// Database schema version. Bump when DDL changes OR when an idempotent
+// upgrade task (capability grant, option backfill) must run once on
+// existing sites — maybe_run_db_migration() is the reliable "something
+// changed" signal, since auto-updates don't re-fire the activation hook.
 //
 // 0.2.0 (v0.6.0 dev) — Scheduled triggers. Adds trigger_type column to
 // wp_fmw_workflows, makes form_id nullable, adds idx_trigger_type index.
 // See FMW_Schema::migrate_to_0_2_0() for the migration logic.
+// 0.3.0 (v0.6.0, Wave 1.A) — NO schema change. Deliberately bumped to
+// trigger the capability re-grant path so existing sites pick up the
+// scoped flowmint_manage_workflows capability. FMW_Schema::migrate()
+// intentionally has no migrate_to_0_3_0() branch — create_tables() is
+// idempotent and the 0.2.0 branch is version-gated, so a no-DDL bump
+// is safe. This is not a version/code mismatch.
 define( 'FMW_DB_VERSION', '0.3.0' );
 
 // Plugin paths and URLs.
