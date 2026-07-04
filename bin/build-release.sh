@@ -78,6 +78,58 @@ cd "${BUILD_DIR}"
 zip -r "${PLUGIN_SLUG}.zip" "${PLUGIN_SLUG}/" -x "*.DS_Store" "*/.git/*" > /dev/null
 cd ..
 
+# ============================================
+# VERIFY ZIP INTERNAL STRUCTURE
+# ============================================
+# Guards against a flattened/hand-assembled archive (Promptless Theme
+# v1.2.5 incident: a manually built zip lost a directory level and fataled
+# on every site). Checks the SHIPPED ARTIFACT's manifest, not the staging
+# folder. This script is the only sanctioned packaging path.
+#
+# The vendor/ entries also enforce the documented FlowMint gotcha: if
+# Composer isn't on PATH, the ZIP ships without vendor/ (no autoloader,
+# no Action Scheduler) and the plugin is dead on arrival.
+echo ""
+echo "Verifying ZIP internal structure..."
+
+ZIP_MANIFEST=$(unzip -l "${BUILD_DIR}/${PLUGIN_SLUG}.zip")
+
+REQUIRED_ZIP_PATHS=(
+    "${PLUGIN_SLUG}/flowmint-workflows.php"
+    "${PLUGIN_SLUG}/includes/class-fmw-autoloader.php"
+    "${PLUGIN_SLUG}/includes/Core/class-fmw-workflow-executor.php"
+    "${PLUGIN_SLUG}/includes/Database/class-fmw-schema.php"
+    "${PLUGIN_SLUG}/includes/Connectors/MCP/assets/flowmint-connector.js"
+    "${PLUGIN_SLUG}/vendor/autoload.php"
+    "${PLUGIN_SLUG}/vendor/woocommerce/action-scheduler/action-scheduler.php"
+)
+
+ZIP_STRUCTURE_OK=1
+for path in "${REQUIRED_ZIP_PATHS[@]}"; do
+    if echo "$ZIP_MANIFEST" | grep -q " ${path}$"; then
+        echo "  OK  $path"
+    else
+        echo "  MISSING FROM ZIP: $path"
+        ZIP_STRUCTURE_OK=0
+    fi
+done
+
+# A flattened build puts nested files at the plugin root — detect that too.
+if echo "$ZIP_MANIFEST" | grep -q " ${PLUGIN_SLUG}/class-fmw-workflow-executor.php$"; then
+    echo "  FLATTENED STRUCTURE DETECTED: includes/ files found at plugin root"
+    ZIP_STRUCTURE_OK=0
+fi
+
+if [ $ZIP_STRUCTURE_OK -eq 0 ]; then
+    rm -f "${BUILD_DIR}/${PLUGIN_SLUG}.zip"
+    echo ""
+    echo "ERROR: ZIP structure verification FAILED — archive deleted."
+    echo "Do NOT hand-assemble release zips; this script is the only sanctioned packaging path."
+    exit 1
+fi
+
+echo "ZIP structure verified."
+
 ZIP_SIZE=$(du -h "${BUILD_DIR}/${PLUGIN_SLUG}.zip" | cut -f1)
 echo ""
 echo "Done! Created ${BUILD_DIR}/${PLUGIN_SLUG}.zip (${ZIP_SIZE})"
