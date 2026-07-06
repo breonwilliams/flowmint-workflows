@@ -90,7 +90,7 @@ The full docs live in `docs/`. Read in roughly this order:
 [ Run history: success ]
 ```
 
-If any step fails, Action Scheduler retries with exponential backoff (workflow-level retry, default max 3, via `FMW_Workflow_Job::handle_failure()`). After max retries the run is marked failed and `fmw_workflow_run_failed` fires. **⚠️ Honest status: no Slack/email failure notification is implemented yet** — there is no `FMW_Slack_Client` in the codebase (`docs/SETUP_SLACK.md` is aspirational), so failed runs are only visible in the admin UI (and replayable there). Wiring a notifier to `fmw_workflow_run_failed` is a known small-feature gap.
+If any step fails, Action Scheduler retries with exponential backoff (workflow-level retry, default max 3, via `FMW_Workflow_Job::handle_failure()`). After max retries the run is marked failed and `fmw_workflow_run_failed` fires. **`FMW_Failure_Notifier`** (`includes/Core/class-fmw-failure-notifier.php`) listens at priority 100 and pushes a notification: Slack incoming webhook when the `slack_webhook` credential is configured (non-blocking POST), else email to the `notification_email` credential falling back to `admin_email`. Filters: `fmw_failure_notification_enabled`, `fmw_failure_notification_message`. The notifier is defensively wrapped — it can never break the failure path it observes. (There is still no general-purpose `FMW_Slack_Client` step for workflows to POST arbitrary messages — `docs/SETUP_SLACK.md`'s webhook setup section now serves the notifier.)
 
 ## Plugin file structure
 

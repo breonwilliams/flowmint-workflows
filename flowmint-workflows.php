@@ -368,6 +368,11 @@ final class FlowMint_Workflows {
         // Workflow job handler — registers Action Scheduler hook.
         FMW_Workflow_Job::register();
 
+        // Failure notifier — Slack (slack_webhook credential) or email
+        // fallback when a run permanently fails. Closes the "failed runs
+        // are only visible in the admin UI" operational gap.
+        ( new FMW_Failure_Notifier() )->init();
+
         // REST API.
         ( new FMW_REST_Api() )->register_routes();
 
