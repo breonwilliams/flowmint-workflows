@@ -4,7 +4,7 @@ Tags: workflow, automation, form submissions, async, action scheduler
 Requires at least: 5.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 0.6.1
+Stable tag: 0.6.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -87,6 +87,10 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 * Phase 1: Core engine, DB schema, base step types, submission listener.
 
 == Upgrade Notice ==
+
+= 0.6.5 =
+Adds failure notifications: when a workflow run permanently fails, FlowMint now alerts you via Slack (slack_webhook credential) or email (notification_email credential / admin email) with a link to inspect and replay the run. No schema or workflow changes; safe update from any 0.6.x.
+
 
 = 0.6.1 =
 Connector admin page UI polish — renamed to vendor-neutral "Connector" / "The FlowMint Connector" naming, new card-based layout with clearer 3-step setup flow. No behavior changes.

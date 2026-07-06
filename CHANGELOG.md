@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.5] — 2026-07-04
+
+### Added
+- **Failure notifications.** `FMW_Failure_Notifier` (`includes/Core/class-fmw-failure-notifier.php`) listens to `fmw_workflow_run_failed` at priority 100 and pushes a plain-text alert when a run permanently fails (exhausts all retries): Slack incoming webhook when the `slack_webhook` credential is configured (non-blocking POST, 3s timeout), otherwise email to the `notification_email` credential falling back to the site `admin_email` — every site gets a signal out of the box. The alert carries the workflow name, error code/message, entry context, and a deep link to the run for one-click inspect/replay. Defensively wrapped so it can never break the failure path it observes; fires only after max retries so every alert is a final, human-worthy failure. Filters: `fmw_failure_notification_enabled`, `fmw_failure_notification_message`. Closes the long-documented "failed runs are only visible in the admin UI" operational gap.
+
+### Changed
+- `bin/build-release.sh` now verifies the release ZIP's internal structure after packaging (required nested paths incl. `vendor/autoload.php` and Action Scheduler) and aborts on a flattened or vendor-less archive — turning the documented "Composer not on PATH → dead-on-arrival ZIP" gotcha into a hard build failure. Build tooling only; not shipped in the ZIP.
+- Documentation truthfulness pass: `CLAUDE.md` corrected to shipped reality (phase table, `pforms_*` hook names since FRE 1.8.0, FRE 1.8.0 minimum, MCP layout, known gaps) and the `FMW_DB_VERSION` 0.3.0 no-DDL convention documented at the constant.
+
 ## [0.6.4] — 2026-06-02
 
 ### Fixed

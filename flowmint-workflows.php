@@ -3,7 +3,7 @@
  * Plugin Name: FlowMint Workflows
  * Plugin URI: https://flowmint.dev
  * Description: Async workflow runtime that orchestrates form submissions and recurring schedules through configurable pipelines (Drive, Printavo, Email, HTTP, FE retention, etc.). Companion plugin to Promptless Forms.
- * Version: 0.6.4
+ * Version: 0.6.5
  * Requires at least: 5.0
  * Requires PHP: 7.4
  * Author: FlowMint
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin version.
-define( 'FMW_VERSION', '0.6.4' );
+define( 'FMW_VERSION', '0.6.5' );
 
 // Database schema version. Bump when DDL changes OR when an idempotent
 // upgrade task (capability grant, option backfill) must run once on
@@ -49,10 +49,11 @@ define( 'FMW_PLUGIN_FILE', __FILE__ );
 // Minimum FormEngine version required. Bumped to 1.8.0: that release
 // renamed Form Runtime Engine's symbol surface from the `fre`/`FRE_`
 // prefix to `pforms`/`PForms_` for WordPress.org compliance, and the
-// version marker FlowMint reads is now PForms_VERSION. FlowMint 0.6.1+
+// version marker FlowMint reads is now PForms_VERSION. FlowMint 0.6.2+
 // speaks the new names (pforms_submission_complete hook, PForms_Entry /
-// PForms_Entry_Query classes, pforms() accessor). Deploy FRE 1.8.0 and
-// this FlowMint build together.
+// PForms_Entry_Query classes, pforms() accessor) — NOT 0.6.1, which
+// still listened to fre_submission_complete (see FRE CHANGELOG erratum,
+// 2026-07-04). Deploy FRE 1.8.0+ and FlowMint 0.6.2+ together.
 define( 'FMW_REQUIRED_FRE_VERSION', '1.8.0' );
 
 // REST namespace.
