@@ -4,7 +4,7 @@
  * Plugin URI: https://flowmint.dev
  * Description: Async workflow runtime that orchestrates form submissions and recurring schedules through configurable pipelines (Drive, Printavo, Email, HTTP, FE retention, etc.). Companion plugin to Promptless Forms.
  * Version: 0.6.5
- * Requires at least: 5.0
+ * Requires at least: 5.6
  * Requires PHP: 7.4
  * Author: FlowMint
  * Author URI: https://flowmint.dev

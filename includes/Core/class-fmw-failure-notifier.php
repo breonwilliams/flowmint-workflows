@@ -127,13 +127,26 @@ class FMW_Failure_Notifier {
 			$workflow_name,
 			get_bloginfo( 'name' )
 		);
-		$lines[] = sprintf( __( 'Error: [%1$s] %2$s', 'flowmint-workflows' ), $error_code, $error_message );
+		$lines[] = sprintf(
+			/* translators: 1: machine-readable error code, 2: human-readable error message */
+			__( 'Error: [%1$s] %2$s', 'flowmint-workflows' ),
+			$error_code,
+			$error_message
+		);
 		if ( (int) $entry_id > 0 ) {
-			$lines[] = sprintf( __( 'Form entry: #%d', 'flowmint-workflows' ), (int) $entry_id );
+			$lines[] = sprintf(
+				/* translators: %d: form entry ID */
+				__( 'Form entry: #%d', 'flowmint-workflows' ),
+				(int) $entry_id
+			);
 		} else {
 			$lines[] = __( 'Trigger: scheduled run (no form entry)', 'flowmint-workflows' );
 		}
-		$lines[] = sprintf( __( 'Inspect + replay: %s', 'flowmint-workflows' ), $run_url );
+		$lines[] = sprintf(
+			/* translators: %s: admin URL of the failed run's detail page */
+			__( 'Inspect + replay: %s', 'flowmint-workflows' ),
+			$run_url
+		);
 
 		return implode( "\n", $lines );
 	}

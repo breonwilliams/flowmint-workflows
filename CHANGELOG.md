@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **Plugin Check compliance sweep (2026-07-11).** Added the required `translators:` comments to the failure notifier's placeholder-bearing `__()` calls; raised `Requires at least` from 5.0 to 5.6 (the Cowork connector depends on the Application Passwords API, WP 5.6+, and scheduled triggers use `wp_timezone()`, WP 5.3+ — the header now matches reality instead of under-promising); bumped `Tested up to` to 7.0. (`includes/Core/class-fmw-failure-notifier.php`, `flowmint-workflows.php`, `readme.txt`, `CLAUDE.md`.)
+
 ## [0.6.5] — 2026-07-04
 
 ### Added
