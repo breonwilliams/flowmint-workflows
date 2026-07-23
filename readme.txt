@@ -4,7 +4,7 @@ Tags: workflow, automation, form submissions, async, action scheduler
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 0.6.6
+Stable tag: 0.6.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -56,6 +56,9 @@ In custom database tables (`{$prefix}fmw_workflows`, `{$prefix}fmw_workflow_runs
 Sensitive credentials (Drive service account JSON, Printavo API token) are encrypted at rest via the WordPress salts. The connector REST API never exposes plaintext values — it only reports whether each credential key is configured.
 
 == Changelog ==
+
+= 0.6.7 =
+* Internal: developer/AI reference documentation (AGENTS.md) is now maintained in the repository. No functional changes.
 
 = 0.6.0 — 2026-05-15 =
 * **New: Scheduled workflow triggers.** Workflows can now fire on a recurring schedule (`hourly` / `twicedaily` / `daily` / `weekly`) in addition to form submissions. Two trigger types in v0.6: `{ type: "form", form_id: "…" }` (existing pattern, explicit) and `{ type: "schedule", interval: "…", hour: …, minute: …, day_of_week: … }` (new). Existing form-triggered workflows are normalized into the new shape transparently; no JSON changes required.

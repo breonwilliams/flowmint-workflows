@@ -60,6 +60,7 @@ build
 release
 *.zip
 *.log
+_to_delete
 .DS_Store
 Thumbs.db
 EXCLUDE
