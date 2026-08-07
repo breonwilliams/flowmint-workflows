@@ -209,8 +209,8 @@ class FMW_Connector_Admin {
                 <div id="fmw-setup-command-container" style="display:none;">
                     <div class="fmw-connector-code-block">
                         <pre id="fmw-setup-command"></pre>
-                        <button type="button" class="button fmw-connector-copy-btn" id="fmw-copy-setup-command"><?php esc_html_e( 'Copy Command', 'flowmint-workflows' ); ?></button>
                     </div>
+                    <button type="button" class="button fmw-connector-copy-btn" id="fmw-copy-setup-command"><?php esc_html_e( 'Copy Command', 'flowmint-workflows' ); ?></button>
                     <p class="description"><?php esc_html_e( 'After running the command, quit Claude Desktop (Cmd+Q) and reopen it. The connector will be active in your next session.', 'flowmint-workflows' ); ?></p>
                 </div>
 
@@ -337,9 +337,11 @@ class FMW_Connector_Admin {
                 color: #50c878;
             }
             .fmw-connector-copy-btn {
-                position: absolute !important;
-                top: 8px !important;
-                right: 8px !important;
+                /* Sits BELOW the code block. Never position this over the
+                   command text: the old absolute top-right placement covered
+                   the command and was illegible on the dark background. */
+                display: block !important;
+                margin: 8px 0 4px !important;
                 font-size: 12px !important;
                 padding: 2px 10px !important;
                 min-height: 28px !important;
