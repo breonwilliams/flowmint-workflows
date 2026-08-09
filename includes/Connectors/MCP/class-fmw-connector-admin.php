@@ -336,15 +336,18 @@ class FMW_Connector_Admin {
                 line-height: 1.6;
                 color: #50c878;
             }
-            .fmw-connector-copy-btn {
+            /* .wp-core-ui scoping matches core's .wp-core-ui .button at (0,2,0)
+               and wins the tie by source order (these styles load after core's
+               buttons.css) - no important-flags, per the no-CSS-hacks rule. */
+            .wp-core-ui .fmw-connector-copy-btn {
                 /* Sits BELOW the code block. Never position this over the
                    command text: the old absolute top-right placement covered
                    the command and was illegible on the dark background. */
-                display: block !important;
-                margin: 8px 0 4px !important;
-                font-size: 12px !important;
-                padding: 2px 10px !important;
-                min-height: 28px !important;
+                display: block;
+                margin: 8px 0 4px;
+                font-size: 12px;
+                padding: 2px 10px;
+                min-height: 28px;
             }
 
             .fmw-connector-dev-info {
