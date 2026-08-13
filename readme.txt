@@ -4,7 +4,7 @@ Tags: workflow, automation, form submissions, async, action scheduler
 Requires at least: 5.6
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 0.6.7
+Stable tag: 0.6.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -56,6 +56,9 @@ In custom database tables (`{$prefix}fmw_workflows`, `{$prefix}fmw_workflow_runs
 Sensitive credentials (Drive service account JSON, Printavo API token) are encrypted at rest via the WordPress salts. The connector REST API never exposes plaintext values — it only reports whether each credential key is configured.
 
 == Changelog ==
+
+= 0.6.8 =
+* Improved: the "Copy Command" button on the Connector setup screen now sits below the command block instead of overlaying it, fixing a tap-target overlap and a color-contrast issue.
 
 = 0.6.7 =
 * Internal: developer/AI reference documentation (AGENTS.md) is now maintained in the repository. No functional changes.
