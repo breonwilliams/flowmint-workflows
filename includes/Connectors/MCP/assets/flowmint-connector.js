@@ -377,6 +377,56 @@ function getConfig() {
  *     same reason — let Node.js compute it, but set the header rather than
  *     relying on chunked.
  */
+// TLS TRUST-ANCHOR failures are NOT a wrong-URL problem, and saying "is the
+// site URL correct?" sends the user to check the one thing that is already
+// fine. Node does not read the macOS keychain — it ships its own Mozilla CA
+// bundle — so trusting a local dev certificate in Keychain Access (or via
+// Local's Trust button) fixes browsers and does nothing for this process. The
+// remedy is NODE_EXTRA_CA_CERTS pointing at the site's certificate.
+//
+// STRICTLY trust-anchor codes only. ERR_TLS_CERT_ALTNAME_INVALID is
+// deliberately NOT in this set: it means the certificate is trusted but its
+// SAN does not cover the host that was dialled — a hostname mismatch, which
+// NODE_EXTRA_CA_CERTS cannot fix. Adding it here would hand the user a remedy
+// that cannot work and point them away from the real cause (for that code the
+// URL genuinely IS suspect, which is what the default wording already says).
+// Every other error code keeps the original wording.
+const TLS_TRUST_ERROR_CODES = new Set([
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+]);
+
+// Local by Flywheel's conventional per-site certificate path is only useful
+// advice for a non-public host; naming it for a public domain is noise that
+// implies the wrong tool is in play.
+const NON_PUBLIC_HOST = /(^localhost$|\.local$|\.test$)/i;
+
+function connectionErrorMessage(e, siteUrl, prefix) {
+  if (TLS_TRUST_ERROR_CODES.has(e.code)) {
+    let host = siteUrl;
+    try {
+      host = new URL(siteUrl).hostname;
+    } catch {
+      /* keep the raw string if it will not parse */
+    }
+    const localHint = NON_PUBLIC_HOST.test(host)
+      ? `For Local by Flywheel that is ` +
+        `"$HOME/Library/Application Support/Local/run/router/nginx/certs/${host}.crt". `
+      : "";
+    return (
+      `${prefix}: the site's TLS certificate is not trusted by Node (${e.code}). ` +
+      `The site URL is almost certainly fine — Node does not read the macOS keychain, ` +
+      `so trusting the certificate in Local or Keychain Access only fixes browsers. ` +
+      `Point NODE_EXTRA_CA_CERTS at the certificate in this server's "env" block in ` +
+      `claude_desktop_config.json, then quit and reopen Claude Desktop. ${localHint}` +
+      `Do NOT set NODE_TLS_REJECT_UNAUTHORIZED=0 — that disables verification for every host, ` +
+      `including production sites. (${siteUrl})`
+    );
+  }
+  return `${prefix}: ${e.message}. Is the site URL correct? (${siteUrl})`;
+}
+
 function makeRequest(method, path, body = null) {
   return new Promise((resolve, reject) => {
     const config = getConfig();
@@ -438,7 +488,7 @@ function makeRequest(method, path, body = null) {
     req.on("error", (e) => {
       reject(
         new Error(
-          `Connection failed: ${e.message}. Is the site URL correct? (${config.siteUrl})`
+          connectionErrorMessage(e, config.siteUrl, "Connection failed")
         )
       );
     });
