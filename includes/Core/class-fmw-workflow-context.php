@@ -67,6 +67,13 @@ class FMW_Workflow_Context {
     private $entry_files = [];
 
     /**
+     * Human-readable counterparts to $data, keyed identically.
+     *
+     * @var array
+     */
+    private $labels = [];
+
+    /**
      * Form metadata (id, title).
      *
      * @var array
@@ -151,6 +158,70 @@ class FMW_Workflow_Context {
      */
     public function set_data( array $data ) {
         $this->data = $data;
+        $this->build_labels( $data );
+    }
+
+    /**
+     * Populate the `labels` namespace: the same keys as `data`, but with
+     * select / radio / checkbox values resolved to the option labels a
+     * visitor actually saw.
+     *
+     * Why this exists. `data` holds RAW STORED VALUES, which is correct for
+     * machine steps (http_post, printavo_*) that want stable identifiers.
+     * It is wrong the moment a value reaches a person: a form whose option
+     * is {value:"joinery", label:"Hand-Cut Joinery Intensive"} produced the
+     * confirmation email "your place is held for the joinery workshop", and
+     * nothing failed — the run completed, every step reported success, and
+     * the defect was visible only by reading the customer's mail.
+     *
+     * Promptless Forms already resolves labels in two places (notification
+     * templates, and webhook payloads under the google_sheets preset), so
+     * FlowMint was the odd one out of three surfaces doing the same job.
+     *
+     * ADDITIVE ONLY. `data` keeps raw values; nothing existing changes
+     * behaviour. Keys with no option list resolve to their raw value, so
+     * `labels` is always safe to use and never empty where `data` is not.
+     *
+     * Degrades silently when Promptless Forms is unavailable or the form
+     * cannot be loaded — labels then mirrors data, which is exactly the
+     * previous behaviour.
+     *
+     * @param array $data Raw submitted values keyed by field key.
+     */
+    private function build_labels( array $data ) {
+        $this->labels = $data;
+
+        if ( ! class_exists( 'PForms_Forms_Repository' )
+            || ! class_exists( 'PForms_Field_Type_Abstract' )
+            || $this->form_id === '' ) {
+            return;
+        }
+
+        $form = PForms_Forms_Repository::get( $this->form_id );
+        if ( empty( $form['config'] ) ) {
+            return;
+        }
+        $config = json_decode( $form['config'], true );
+        if ( ! is_array( $config ) || empty( $config['fields'] ) || ! is_array( $config['fields'] ) ) {
+            return;
+        }
+
+        $field_map = [];
+        foreach ( $config['fields'] as $field ) {
+            if ( is_array( $field ) && ! empty( $field['key'] ) ) {
+                $field_map[ $field['key'] ] = $field;
+            }
+        }
+
+        foreach ( $data as $key => $value ) {
+            if ( ! isset( $field_map[ $key ] ) ) {
+                continue;
+            }
+            $resolved = PForms_Field_Type_Abstract::resolve_display_value( $value, $field_map[ $key ] );
+            if ( is_string( $resolved ) && $resolved !== '' ) {
+                $this->labels[ $key ] = $resolved;
+            }
+        }
     }
 
     /**
@@ -303,6 +374,7 @@ class FMW_Workflow_Context {
         $current = null;
         switch ( $root ) {
             case 'data':        $current = $this->data; break;
+            case 'labels':      $current = $this->labels; break;
             case 'entry':       $current = $this->entry; break;
             case 'entry_files': $current = $this->entry_files; break;
             case 'form':        $current = $this->form; break;
@@ -345,6 +417,7 @@ class FMW_Workflow_Context {
             'entry'       => $this->entry,
             'entry_files' => $this->entry_files,
             'data'        => $this->data,
+            'labels'      => $this->labels,
             'steps'       => $this->steps,
             'vars'        => $this->vars,
         ];

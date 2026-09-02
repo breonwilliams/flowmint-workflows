@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`labels` namespace — human-readable option text for anything a person reads.** `{{ labels.workshop }}` yields "Hand-Cut Joinery Intensive" where `{{ data.workshop }}` yields the stored key `joinery`. Found during end-to-end testing: a confirmation email read "your place is held for the joinery workshop", and nothing failed — the run completed, every step reported success, and the defect was visible only by reading the customer's mail.
+
+  This closed a three-way inconsistency across the stack. Promptless Forms notification templates resolve `{field:key}` to labels, and its webhook payloads resolve them under the `google_sheets` preset — FlowMint was the only surface of the three that could not, at all.
+
+  `labels` mirrors `data` key for key, resolving select / radio / checkbox values through `PForms_Field_Type_Abstract::resolve_display_value()` — the same public helper the Promptless Forms admin entry list already uses, so there is one implementation rather than a copy. Keys with no option list resolve to their raw value, so `labels` is always safe and never emptier than `data`. Degrades to mirroring `data` when Promptless Forms is unavailable or the form cannot be loaded.
+
+  Additive: `data` still holds raw values, which remains correct for machine destinations (`http_post`, `printavo_*`) that want stable identifiers. No existing workflow changes behaviour.
+
+
 ### Fixed
 
 - **`entry_files` was documented as something it is not, in three ways — all of which fail silently.** Verified by uploading a real file through a live multistep form and reading the resulting run context.
