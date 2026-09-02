@@ -224,7 +224,7 @@ class FMW_Connector_Admin {
                     $fmw_cert_hint = '$HOME/Library/Application Support/Local/run/router/nginx/certs/'
                         . $fmw_host . '.crt';
                     ?>
-                <div class="fmw-requirements" style="border-left:4px solid #d63638;">
+                <div class="fmw-connector-requirements fmw-connector-requirements--caution">
                     <strong><?php esc_html_e( 'Local HTTPS site — certificate trust', 'flowmint-workflows' ); ?></strong>
                     <p class="description" style="margin-top:6px;">
                         <?php esc_html_e( 'Node does not read the macOS keychain, so trusting this certificate in Local or Keychain Access fixes browsers only — the connector will still fail with a self-signed certificate error. The command below automatically points NODE_EXTRA_CA_CERTS at Local by Flywheel\'s certificate if it finds one here:', 'flowmint-workflows' ); ?>
@@ -331,20 +331,29 @@ class FMW_Connector_Admin {
 
             .fmw-connector-success-notice {
                 margin: 12px 0 0 0;
-                padding: 8px 12px;
-                background: #edf7ed;
-                border-left: 3px solid #46b450;
-                border-radius: 0 4px 4px 0;
+                padding: 10px 14px;
+                background: #f3f9f4;
+                border: 1px solid #cfe8d6;
+                border-radius: 6px;
             }
             .fmw-connector-success-notice p { margin: 0; }
 
+            /* Informational panel. A full 1px border rather than a heavy accent bar
+               down one edge: the slab reads as a legacy admin pattern beside
+               rounded corners, and it forces an asymmetric radius to stop a square
+               corner fighting a round one. Tone comes from fill plus border. */
             .fmw-connector-requirements {
-                background: #f0f6fc;
-                border: 1px solid #c8d8e4;
-                border-radius: 4px;
-                padding: 12px 16px;
+                background: #f7f9fb;
+                border: 1px solid #e3e8ee;
+                border-radius: 6px;
+                padding: 14px 16px;
                 margin: 12px 0;
+                line-height: 1.5;
             }
+            .fmw-connector-requirements strong { display: block; margin-bottom: 6px; }
+            .fmw-connector-requirements code { background: #eef1f5; border-radius: 3px; padding: 1px 5px; }
+            .fmw-connector-requirements--caution { background: #fdf9f1; border-color: #ecdfc6; }
+            .fmw-connector-requirements--caution code { background: #f6eee0; }
             .fmw-connector-requirements ul { margin: 4px 0 0 20px; }
             .fmw-connector-requirements li { margin-bottom: 2px; }
 
