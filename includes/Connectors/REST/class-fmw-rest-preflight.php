@@ -88,6 +88,7 @@ class FMW_REST_Preflight {
                 'common_traps' => [
                     'entry.fields.* does NOT exist. Form fields are at data.*. The interpolator silently resolves missing paths to empty string, so the step succeeds with empty content rather than failing loudly.',
                     'steps.<type>.* does NOT work. Use the step NAME, not the type: `{{ steps.find_customer.contact_id }}` not `{{ steps.printavo_find_or_create_customer.contact_id }}`.',
+					'data.* holds RAW STORED VALUES, not the labels a visitor saw. For select / radio / checkbox fields the stored value is the option KEY, so a form whose option is {value:"joinery", label:"Hand-Cut Joinery Intensive"} interpolates {{ data.workshop }} as "joinery". In a machine step (http_post, printavo_*) that is what you want — stable identifiers. In a customer-facing email it produces "your place is held for the joinery workshop", and nothing fails, so the mistake ships. FlowMint has NO label resolution: unlike Promptless Forms notifications, where {field:key} resolves to the label, and unlike its webhook payloads, which resolve labels under the google_sheets preset or an explicit webhook_resolve_option_labels. Until a labels namespace exists, write the human-readable text yourself (a set_variable step, or a conditional on the raw value) whenever the value reaches a person.',
                 ],
             ],
             'diagnostics' => [
