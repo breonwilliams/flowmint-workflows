@@ -102,7 +102,7 @@ Adds failure notifications: when a workflow run permanently fails, FlowMint now 
 Connector admin page UI polish — renamed to vendor-neutral "Connector" / "The FlowMint Connector" naming, new card-based layout with clearer 3-step setup flow. No behavior changes.
 
 = 0.6.0 =
-Adds scheduled workflow triggers (hourly / daily / weekly / twicedaily) and two new step types for bulk-querying and deleting FormEngine entries. Database schema bumps to v0.2.0 via additive ALTER (nullable form_id + new trigger_type column with index). Migration runs automatically on the first plugin load and is idempotent. Existing form-triggered workflows are unaffected — they're normalized into the new trigger-block shape transparently. Rolling back to v0.5.0 does NOT require dropping the new column; the older code simply ignores it.
+Adds scheduled workflow triggers (hourly / daily / weekly / twicedaily) and two step types for bulk-querying and deleting form entries. An additive, idempotent migration runs on first load. Existing workflows are unaffected; rolling back to 0.5.0 needs no database change.
 
 = 0.5.0 =
 Adds the Claude Cowork MCP connector and full Plugin Check compliance pass. No behavior changes for existing workflows.
