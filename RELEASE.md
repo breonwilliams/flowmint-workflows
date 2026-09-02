@@ -137,6 +137,27 @@ Allowed sections: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Securit
 
 Note: FlowMint is currently in the `0.x` series. Bumping to `1.0.0` is reserved for the first version Breon considers customer-ready for general distribution.
 
+**How to decide, mechanically.** Read the `[Unreleased]` block in `CHANGELOG.md`
+before bumping:
+
+| `[Unreleased]` contains | Bump |
+|---|---|
+| anything under `### Added` | **minor** |
+| a change matching the MAJOR examples above | **major** |
+| only `### Fixed` / non-breaking `### Changed` | **patch** |
+
+The rule is deliberately mechanical so the choice falls out of what the changelog
+already says rather than being re-argued each release.
+
+**Numbers are not a queue — nothing is "skipped."** Going `1.2.0` -> `1.3.0` does
+not skip `1.2.1`; that number was never allocated. The segments are categories,
+not a counter, and the patch resets to `0` on every minor bump. In particular
+there is no odometer: the minor does NOT roll over because the patch reached 9.
+Parts of this project's history follow that pattern, which is why older versions
+look strictly sequential — but a minor bump caused by a digit running out carries
+no information, and a version carrying no information cannot tell anyone whether
+an update is safe to take.
+
 ---
 
 ## Plugin Check expectations
