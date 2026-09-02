@@ -3,7 +3,7 @@
  * Plugin Name: FlowMint Workflows
  * Plugin URI: https://flowmint.dev
  * Description: Async workflow runtime that orchestrates form submissions and recurring schedules through configurable pipelines (Drive, Printavo, Email, HTTP, FE retention, etc.). Companion plugin to Promptless Forms.
- * Version: 0.6.8
+ * Version: 0.7.0
  * Requires at least: 5.6
  * Requires PHP: 7.4
  * Author: FlowMint
@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin version.
-define( 'FMW_VERSION', '0.6.8' );
+define( 'FMW_VERSION', '0.7.0' );
 
 // Database schema version. Bump when DDL changes OR when an idempotent
 // upgrade task (capability grant, option backfill) must run once on

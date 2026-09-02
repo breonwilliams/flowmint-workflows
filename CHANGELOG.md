@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-09-02
+
 ### Added
 
 - **`labels` namespace — human-readable option text for anything a person reads.** `{{ labels.workshop }}` yields "Hand-Cut Joinery Intensive" where `{{ data.workshop }}` yields the stored key `joinery`. Found during end-to-end testing: a confirmation email read "your place is held for the joinery workshop", and nothing failed — the run completed, every step reported success, and the defect was visible only by reading the customer's mail.
