@@ -7,6 +7,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Fixed
+
+- **`entry_files` was documented as something it is not, in three ways — all of which fail silently.** Verified by uploading a real file through a live multistep form and reading the resulting run context.
+
+  1. Documented as an "Array of uploaded files". It is a **map keyed by field key**. `{{ entry_files[0].file_name }}` resolves to nothing; `{{ entry_files.reference_images.file_name }}` is correct.
+  2. Documented as carrying `file_url`. It does not. Promptless Forms webhook payloads do include one, but `resolve_file_url()` is `private static` on the webhook dispatcher and this context never populates the key.
+  3. Undocumented entirely: for a multi-file field the value is a **single object** when one file was uploaded and an **array of objects** when two or more were. A workflow written and tested against one upload breaks on the second.
+
+  Each of these is invisible at runtime because the interpolator resolves a missing path to an empty string rather than failing — the step reports success and the payload is quietly wrong. The `context_shape` documentation now states all three accurately and points at `file_path` / `attachment_id` and the typed file steps instead.
+
+  Populating a real `file_url` would need Promptless Forms to expose its resolver (or FlowMint to duplicate it); that is a cross-repo API decision and is not made here.
+
+
+### Fixed
 - **The connector could not reach an HTTPS local dev site, and the error blamed the wrong thing.** Node does not read the macOS keychain — it ships its own Mozilla CA bundle — so trusting a Local by Flywheel certificate fixes browsers and leaves every connector call failing with `DEPTH_ZERO_SELF_SIGNED_CERT`. Ported from the reference fix in Promptless WP (`ai-section-builder-modern`), where it was diagnosed and verified end to end. Touches only the connector admin page and the relay's error reporting — no workflow execution, step config, or DB schema is affected, so no `FMW_DB_VERSION` bump is involved and stored workflow JSON is untouched.
   - **The setup command no longer destroys config you added by hand.** It rebuilt `c.mcpServers["flowmint-workflows"]` from scratch, so env keys (`NODE_EXTRA_CA_CERTS`, `HTTP_PROXY`) and server-level keys (`cwd`, `disabled`) were silently lost on every regenerate. It now merges at BOTH levels, overwriting only `command`, `args` and the three env keys it owns. Correct regardless of the certificate work — a regenerate should never discard user config.
   - **`NODE_EXTRA_CA_CERTS` is wired automatically for non-public https hosts.** For `.local` / `.test` / `localhost` on https the command PROBES Local's conventional certificate path and sets the variable only if the file exists; the path is never assumed, since wp-env, Herd and Valet keep certificates elsewhere. The key is set but NEVER deleted on a miss, because an existing value may have been set by hand for tooling whose path cannot be probed. Local's per-site certificate is a self-signed leaf (`CA:FALSE`), which suffices — OpenSSL accepts a self-signed certificate in the trust store as its own anchor, so no CA-generation step is needed. When the probe cannot help, the connector page names the variable and what to point it at rather than emitting a command that fails opaquely. `NODE_TLS_REJECT_UNAUTHORIZED=0` and `rejectUnauthorized: false` are deliberately NOT used — both disable verification process-wide, including for production sites.
