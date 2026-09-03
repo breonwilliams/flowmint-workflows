@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Declares compatibility with WordPress 7.1. The readme still claimed 7.0 while
+  the pressure-test site — which exercises FlowMint's workflow runs, credential
+  handling and connector routes — has been running 7.1 throughout. Post Runtime
+  and Promptless Forms already declare it from the same testing; this brings
+  FlowMint in line. FlowMint is distributed via GitHub rather than
+  wordpress.org, so no listing penalised the stale value, which is precisely
+  why it went unnoticed.
+
 ## [0.7.0] — 2026-09-02
 
 ### Added
