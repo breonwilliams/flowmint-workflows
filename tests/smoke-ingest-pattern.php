@@ -140,8 +140,9 @@ $req = new WP_REST_Request('DELETE', '/' . PCPTPages_REST_NAMESPACE . '/' . PCPT
 $req->set_url_params(['slug' => $cpt]); $req->set_param('purge_data', true);
 (new PCPTPages_Connector_API())->handle_delete_cpt($req);
 global $wpdb;
-foreach ($wpdb->get_col($wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE post_type = %s", $cpt)) as $pid) wp_delete_post((int) $pid, true);
-foreach (['Youth', 'Adult', 'Senior'] as $name) { $t = get_term_by('name', $name, 'category'); if ($t && (int) $t->count === 0) wp_delete_term($t->term_id, 'category'); }
+foreach ($wpdb->get_col($wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE post_type = %s", $cpt)) as $pid) { wp_delete_object_term_relationships((int) $pid, ['category']); wp_delete_post((int) $pid, true); }
+// Term counts are stale here (invalidation was deferred), so judge by relationships, not by count.
+foreach (['Youth', 'Adult', 'Senior'] as $name) { $t = get_term_by('name', $name, 'category'); if ($t && (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->term_relationships} WHERE term_taxonomy_id = %d", $t->term_taxonomy_id)) === 0) wp_delete_term($t->term_id, 'category'); }
 $tomb = get_option(PCPTPages_Connector_API::DELETED_CPTS_OPTION, []);
 if (is_array($tomb) && isset($tomb[$cpt])) { unset($tomb[$cpt]); update_option(PCPTPages_Connector_API::DELETED_CPTS_OPTION, $tomb, false); }
 @unlink($feed_dir . '/feed.json'); @rmdir($feed_dir);
