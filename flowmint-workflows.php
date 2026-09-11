@@ -353,6 +353,7 @@ final class FlowMint_Workflows {
         $this->steps->register_email_steps();
         $this->steps->register_printavo_steps();
         $this->steps->register_http_steps();
+        $this->steps->register_post_runtime_steps();
 
         // Submission listener — listens to fre_submission_complete.
         $this->listener = new FMW_Submission_Listener();

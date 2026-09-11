@@ -152,7 +152,7 @@ FlowMint Workflows DEPENDS ON Form Runtime Engine but lives as a separate plugin
 | 2 | Drive + Email integrations | 10 | ✅ Complete |
 | 3 | Printavo + HTTP integrations | 8 | ✅ Complete |
 | 4 | 725 Print Lab migration | 6 | ✅ Complete (725 production verified) |
-| 5 | Production polish | 12 | ✅ Complete through v0.6.4 (28 step types, scheduled triggers, encrypted credential store) |
+| 5 | Production polish | 12 | ✅ Complete through v0.6.4 (29 step types, scheduled triggers, encrypted credential store) |
 
 Known gaps as of v0.6.4: no `FMW_Slack_Client` (Slack failure notifications documented but unbuilt), no `includes/Mcp/` PHP layer (superseded by the JS stdio connector under `includes/Connectors/MCP/`).
 
@@ -198,4 +198,4 @@ Special considerations FlowMint releases require:
 
 ---
 
-**Plugin status:** v0.6.4 in production (725 Print Lab live). All build phases complete: workflow engine, 28 step types, form + scheduled triggers, Drive/Printavo/Email/HTTP connectors, encrypted credential store, connector REST API + 16-tool MCP server, run-history admin UI with replay. Known gaps: Slack failure notifications (unbuilt), test coverage expansion. This line previously said "no runtime code yet" — that was stale planning-phase text; corrected 2026-07-04.
+**Plugin status:** v0.6.4 in production (725 Print Lab live). All build phases complete: workflow engine, 29 step types (incl. the Post Runtime ingest step `pre_upsert_records`, 2026-09-11), form + scheduled triggers, Drive/Printavo/Email/HTTP connectors, encrypted credential store, connector REST API + 16-tool MCP server, run-history admin UI with replay. Known gaps: Slack failure notifications (unbuilt), test coverage expansion. This line previously said "no runtime code yet" — that was stale planning-phase text; corrected 2026-07-04.

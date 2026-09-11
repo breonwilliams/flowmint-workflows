@@ -383,6 +383,10 @@ class FMW_Workflow_Context {
             case 'steps':       $current = $this->steps; break;
             case 'vars':        $current = $this->vars; break;
             case 'env':         $current = $this->env; break;
+            // The current record inside a per-record template: set by
+            // bulk steps (pre_upsert_records) for each record they process,
+            // restored afterwards. Null outside such a step.
+            case 'item':        $current = $this->vars['item'] ?? null; break;
             default:
                 return null;
         }

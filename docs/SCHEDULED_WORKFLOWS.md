@@ -10,6 +10,7 @@ Use scheduled workflows for any periodic operation that doesn't depend on a fres
 
 - **Retention sweeps.** Daily purge of old FRE entries (the motivating use case for this feature — see "Full example: daily entry retention" below).
 - **Periodic syncs.** Pull a remote API once a day, write the result to Drive or post to Slack.
+- **Ingest from a system of record.** Fetch programs, agendas or permits from the vendor's API and keep Post Runtime records in sync without duplicating — `http_get` → `pre_upsert_records`. See `REFERENCE_PATTERNS.md` Pattern 8.
 - **Maintenance.** Daily housekeeping, weekly digest emails, monthly reports.
 
 Form submissions are *also* still supported, of course — workflows can be one or the other. v0.6 doesn't yet support a single workflow that listens to both.
