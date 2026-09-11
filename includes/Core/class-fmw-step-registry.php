@@ -147,6 +147,19 @@ class FMW_Step_Registry {
     }
 
     /**
+     * Register the Post Runtime step types (ingest from a system of record).
+     */
+    public function register_post_runtime_steps() {
+        $steps = [
+            'FMW_Step_Pre_Upsert_Records',
+        ];
+
+        foreach ( $steps as $class ) {
+            $this->register( $class );
+        }
+    }
+
+    /**
      * Register the Phase 3 HTTP step types.
      */
     public function register_http_steps() {

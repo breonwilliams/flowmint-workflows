@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`pre_upsert_records` — the ingest step (Post Runtime family).** Takes the
+  records a previous step fetched from a system of record, maps each one with
+  a per-record template (`{{ item.* }}`), and creates or updates the mirroring
+  Post Runtime record through its new upsert, keyed by
+  `(post_type, source, external_id)` — so re-running never duplicates and an
+  unchanged record is never rewritten. Two guards make an upstream change
+  loud: `expect_min_records` and `max_failure_ratio` fail the run (and fire
+  the failure notifier) instead of quietly drafting or skipping; records the
+  upstream no longer returns are kept, or unpublished with
+  `missing_upstream: "draft"`, never deleted. FlowMint has no `for_each`
+  step, so this loops internally the way `fre_delete_entries` does.
+  `{{ item }}` is a new context root, meaningful only inside such a step.
+  Reference Pattern 8 documents the full scheduled workflow. Requires Post
+  Runtime Engine 0.8.2+.
+
 ### Changed
 
 - Declares compatibility with WordPress 7.1. The readme still claimed 7.0 while

@@ -85,6 +85,7 @@ class FMW_REST_Preflight {
                     'form'        => 'Bound form metadata: { id }. Example: {{ form.id }} when the same listener handles multiple forms.',
                     'steps'       => 'Outputs from prior steps, keyed by step NAME (not type, not index). Example: {{ steps.find_customer.contact_id }} after a step `{ name: "find_customer", type: "printavo_find_or_create_customer" }`. See each step type\'s output_schema in flowmint_list_step_types for available output fields.',
                     'vars'        => 'Variables set via the `set_variable` step. Example: {{ vars.discount_pct }} after `{ name: "set_discount", type: "set_variable", config: { name: "discount_pct", value: 0.15 } }`.',
+                    'item'        => 'The CURRENT RECORD inside a per-record template — only meaningful in the `map` of pre_upsert_records, where it is set once per record fetched. Example: { "external_id": "{{ item.id }}", "title": "{{ item.name }}", "fields": { "event_start": "{{ item.startDate }}" } }. Null everywhere else.',
                 ],
                 'example'      => 'Send a confirmation email: { "to": "{{ data.email }}", "subject": "Welcome {{ data.name }} — order {{ entry.id }}", "body": "We received your registration for the {{ data.preferred_track }} track on {{ entry.created_at }}." }',
                 'common_traps' => [

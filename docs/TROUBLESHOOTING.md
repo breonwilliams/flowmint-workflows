@@ -211,6 +211,26 @@ isn't registered there yet.
 **Fix:** verify form_id exists on the target environment BEFORE calling
 POST workflows. Use `formengine_list_forms` to confirm.
 
+## Ingest from a system of record (`pre_upsert_records`)
+
+Lessons carried over from the Printavo integration into the reusable pattern, so the next vendor costs days not weeks:
+
+### The live feed is the schema; documentation is a rumour
+
+Every Printavo entry above began as "the docs said X, the API did Y". Before writing a `map`, fetch the endpoint once (curl, or a one-step workflow with `http_get` + `log_info`) and map from what came back. Field names, nesting (`facility.name` vs `facilityName`), date spellings, and how absent values are represented (`null`, `""`, key missing) all vary.
+
+### An empty feed is not "nothing to do"
+
+For a retention sweep an empty list is normal. For an ingest it usually means the endpoint moved, the token expired but returns 200, or the query string was silently ignored. `expect_min_records` exists so that case fails the run instead of, with `missing_upstream: "draft"`, quietly unpublishing every record on the site. Set it to a number an honest feed never falls below.
+
+### One renamed field must not become a hundred blank records
+
+The interpolator resolves a missing path to an empty string and carries on. In a template that is the right behaviour; across a feed it hides a breaking change. The step counts missing paths per template path and reports them in `warnings`, and `max_failure_ratio` fails the run when the required keys (`external_id`, `title`) come back empty on too many records.
+
+### `source` is forever
+
+It is part of every record's identity. Renaming it means every record is "new" on the next run and the old ones look "missing upstream". Pick a short, stable key on day one.
+
 ## Patterns for adding a new connector
 
 Apply these proactively when shipping the next industry connector

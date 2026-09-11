@@ -62,8 +62,9 @@ All steps register themselves via `FMW_Step_Registry::register(self::class)` dur
 | Email | send_email, send_email_template | 2 |
 | Printavo | printavo_find_customer, printavo_create_customer, printavo_find_or_create_customer, printavo_create_quote | 3 |
 | HTTP | http_get, http_post, http_request | 3 |
+| Post Runtime | pre_upsert_records | 4 |
 
-28 step types total. **v0.6** additions (`fre_list_entries`, `fre_delete_entries`) ship alongside the scheduled-trigger system documented in `SCHEDULED_WORKFLOWS.md` — typically chained as a daily retention sweep.
+29 step types total. **v0.6** additions (`fre_list_entries`, `fre_delete_entries`) ship alongside the scheduled-trigger system documented in `SCHEDULED_WORKFLOWS.md` — typically chained as a daily retention sweep.
 
 ---
 
@@ -828,6 +829,69 @@ Full control over HTTP method, headers, body. Use for PUT/PATCH/DELETE or unusua
 | `accept_non_2xx` | bool | no | If true, returns the response instead of throwing |
 
 **Output:** Same as `http_get`/`http_post`.
+
+---
+
+## Post Runtime (Phase 4)
+
+The ingest step. Post Runtime owns the record types (programs, agendas, permits…); this step keeps them in sync with a system of record without duplicating and without touching what has not changed. Requires Post Runtime Engine 0.8.2+ (its `upsert_external`).
+
+### `pre_upsert_records`
+
+Takes the array a previous step fetched (usually `http_get`), evaluates `map` once per record with the record as `{{ item.* }}`, and calls Post Runtime's upsert for each — keyed by `(post_type, source, external_id)`. FlowMint has no `for_each` step, so this step loops internally the way `fre_delete_entries` does: per-record failures are collected in the output, not thrown.
+
+**Side effects:** Yes (creates and updates records; may unpublish).
+
+**Config:**
+```json
+{
+  "post_type": "program",
+  "source": "recdesk",
+  "records": "{{ steps.fetch.body.programs }}",
+  "map": {
+    "external_id": "{{ item.id }}",
+    "title": "{{ item.name }}",
+    "excerpt": "{{ item.shortDescription }}",
+    "status": "publish",
+    "fields": {
+      "event_start": "{{ item.startDate }}",
+      "event_end": "{{ item.endDate }}",
+      "event_location": "{{ item.facility.name }}",
+      "registration_url": "{{ item.registrationUrl }}"
+    },
+    "taxonomies": { "category": "{{ item.categoryName }}" }
+  },
+  "expect_min_records": 10,
+  "max_failure_ratio": 0.1,
+  "missing_upstream": "draft"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `post_type` | string | yes | Post Runtime record type to write into. |
+| `source` | string | yes | Short key for the system of record (`recdesk`, `civicclerk`). Part of every record's identity; keep it stable forever. |
+| `records` | array | yes | The fetched records. `{{ steps.fetch.body }}` for a top-level array, `{{ steps.fetch.body.items }}` for a wrapped one. A keyed object is accepted as a list. |
+| `map` | object | yes | Per-record template. `external_id` and `title` are required; `content`, `excerpt`, `status`, `fields`, `taxonomies`, `featured_image_id` optional. Only the keys present are written, so a field you do not map keeps its current value on the site. |
+| `expect_min_records` | int | no | Fail the step if fewer records arrive. Default 1. Set it to what an empty feed would NEVER legitimately be. |
+| `max_failure_ratio` | number | no | Fail the step if more than this share of records could not be mapped or written. Default 0.1. |
+| `missing_upstream` | `keep` \| `draft` | no | Records of this `source` the upstream no longer returns: keep (default) or unpublish to draft. Never delete. Only acts when both guards passed. |
+
+**Output:**
+```json
+{
+  "received_count": 42, "created_count": 3, "updated_count": 5, "unchanged_count": 34, "failed_count": 0, "drafted_count": 1,
+  "created_ids": [1512, 1513, 1514], "updated_ids": [...], "unchanged_ids": [...], "drafted_ids": [1201],
+  "failed": [{ "index": 7, "external_id": "4471", "error": "Field nope is not registered on CPT program." }],
+  "warnings": ["{{ item.facility.name }} was missing on 3 of 42 record(s) and resolved to empty."]
+}
+```
+
+**Why it fails loudly.** An upstream that starts returning an empty list, or renames a field, must not quietly draft every record or quietly skip most of the feed. Either guard throws `upstream_shape`; the run fails; the failure notifier fires; records already written stay; nothing is drafted. That is the "visible failure path" of the ingest pattern.
+
+**Idempotency:** Complete. Re-running with the same feed reports every record `unchanged` and writes nothing (Post Runtime compares a hash of the mapped payload). A required key resolving to empty fails that record only.
+
+See `REFERENCE_PATTERNS.md` Pattern 8 for the full scheduled workflow.
 
 ---
 

@@ -461,6 +461,65 @@ Some forms have multiple file fields where only one is filled depending on the f
 
 Each upload step has a `skip_if` that checks for file existence before attempting. Avoids the "file not found" error path entirely.
 
+## Pattern 8: External system-of-record ingest (recreation programs, agendas, permits)
+
+**When the site must show data that lives somewhere else** — a recreation management system, an agenda manager, a licensing database — and staff must not enter it twice. The pattern is: scheduled fetch → per-record map → upsert into a Post Runtime record type, with an identity that makes re-running safe and guards that make an upstream change loud. **The pattern is the platform's; the mapping is the project's.** Do not build a vendor client: `http_get` plus a credential is the client.
+
+```json
+{
+  "trigger": { "type": "schedule", "interval": "daily", "hour": 4, "minute": 30 },
+  "steps": [
+    {
+      "name": "fetch",
+      "type": "http_get",
+      "config": {
+        "url": "https://api.vendor.example/v1/programs?status=active",
+        "headers": { "Accept": "application/json", "Authorization": "Bearer {{ env.vendor_api_token }}" },
+        "timeout_seconds": 60
+      }
+    },
+    {
+      "name": "upsert",
+      "type": "pre_upsert_records",
+      "config": {
+        "post_type": "program",
+        "source": "vendor",
+        "records": "{{ steps.fetch.body.programs }}",
+        "map": {
+          "external_id": "{{ item.id }}",
+          "title": "{{ item.name }}",
+          "excerpt": "{{ item.shortDescription }}",
+          "fields": {
+            "event_start": "{{ item.startDate }}",
+            "event_end": "{{ item.endDate }}",
+            "event_location": "{{ item.facility.name }}",
+            "registration_url": "{{ item.registrationUrl }}",
+            "spots_left": "{{ item.availability.remaining }}"
+          },
+          "taxonomies": { "category": "{{ item.category }}" }
+        },
+        "expect_min_records": 10,
+        "max_failure_ratio": 0.1,
+        "missing_upstream": "draft"
+      }
+    },
+    {
+      "name": "report",
+      "type": "log_info",
+      "config": { "message": "Programs sync: {{ steps.upsert.created_count }} new, {{ steps.upsert.updated_count }} changed, {{ steps.upsert.unchanged_count }} same, {{ steps.upsert.drafted_count }} withdrawn, {{ steps.upsert.failed_count }} failed." }
+    }
+  ]
+}
+```
+
+**Before writing the mapping:** fetch the feed once by hand and read the real shape — field names, nesting, how dates and empties are spelled. The Printavo lesson in `TROUBLESHOOTING.md` applies to every vendor: the live response is authoritative, the documentation is not. Then register the Post Runtime record type and its fields (`postruntime_register_cpt`, `postruntime_define_post_field`) so the `fields` keys exist before the first run.
+
+**What makes it safe to re-run:** identity is `(post_type, source, external_id)`, kept on the record by Post Runtime. Same feed → every record `unchanged`, nothing written. Changed record → `updated`, only the mapped keys. An editor's local edit to a field the map does not name survives.
+
+**What makes a change upstream loud:** `expect_min_records` catches an empty or re-shaped feed; `max_failure_ratio` catches a renamed field. Either fails the run and the failure notifier fires; nothing is drafted.
+
+**Do not** map a field you do not want overwritten every day, set `missing_upstream: "draft"` before the first few runs look right, or change `source` once records exist (it is part of their identity).
+
 ## Anti-patterns to avoid
 
 ### ❌ Don't put credentials in workflow JSON
