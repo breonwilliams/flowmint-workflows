@@ -47,6 +47,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The unit suite had been red since v0.6.0.** Eleven `WorkflowValidatorTest`
+  cases built workflow configs with no `trigger` block and no legacy
+  `form_id`, which the v0.6.0 validator rightly rejects ("Missing required
+  field: trigger"). The validator was correct; the fixtures had not been
+  updated with it. They now carry a form trigger. The one skipped test
+  (compound expressions with bare function calls) is a documented parser
+  limitation, unchanged.
+
 - **`entry_files` was documented as something it is not, in three ways — all of which fail silently.** Verified by uploading a real file through a live multistep form and reading the resulting run context.
 
   1. Documented as an "Array of uploaded files". It is a **map keyed by field key**. `{{ entry_files[0].file_name }}` resolves to nothing; `{{ entry_files.reference_images.file_name }}` is correct.
