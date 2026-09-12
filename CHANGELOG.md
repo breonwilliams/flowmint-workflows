@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-09-12
+
+### Fixed
+
+- **Plugin Check reported four errors against the 0.8.0 package**, all
+  exception messages in the `pre_upsert_records` step that interpolate a
+  value (a missing map key, record counts, a failure sample). The escaping
+  sniff wants those run through `esc_html()`; they are now, with no change
+  to what a run reports. Zero errors on the built package; the release
+  process runs Plugin Check on the artifact before publishing.
+
 ## [0.8.0] - 2026-09-12
 
 ### Added

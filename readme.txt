@@ -4,7 +4,7 @@ Tags: workflow, automation, form submissions, async, action scheduler
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.8.0
+Stable tag: 0.8.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,9 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 
 == Changelog ==
 
+= 0.8.1 =
+* Fixed: four Plugin Check errors in the 0.8.0 package (unescaped exception messages in the ingest step). No behaviour change.
+
 = 0.8.0 =
 * Added: the ingest step, `pre_upsert_records`. Takes the records a previous step fetched from a system of record, maps each one with a per-record template, and creates or updates the matching Post Runtime record by source and external id — so re-running a scheduled workflow never duplicates and an unchanged record is never rewritten. Two guards make an upstream change loud instead of silent, and records the upstream stops returning are kept or unpublished, never deleted. Requires Post Runtime Engine 0.9.0 or newer.
 * Changed: declares compatibility with WordPress 7.1.
@@ -81,10 +84,6 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 * **Daily reconciliation:** an `fmw_reconcile_scheduled_events` AS recurring action reconciles AS events with the workflows table, providing drift correction for the rare case where an event was lost.
 * Full design contract: `docs/DESIGN_SCHEDULED_TRIGGERS.md`. User guide: `docs/SCHEDULED_WORKFLOWS.md`.
 
-= 0.5.0 — 2026-05-10 =
-* New: Claude Cowork MCP connector. Workflows can now be created, inspected, and replayed from Claude Desktop via the `FlowMint Workflows → Claude Connection` admin page. Includes 16 MCP tools mapping 1:1 to the existing REST endpoints.
-* New: Two-gate security model — connector defaults to disabled site-wide; admin opts in via the kill-switch toggle.
-* Plugin-checker compliance pass: wrapped exception messages in `esc_html()`, added `phpcs:disable/enable` blocks around repository SQL with dynamic table names, normalized file-system operations to WP_Filesystem where practical, and added context-specific `phpcs:ignore` reasons where direct PHP filesystem APIs are required (streaming uploads).
 
 
 WordPress truncates this section at 5,000 characters, so it keeps a rolling window of the
@@ -92,6 +91,9 @@ six most recent releases. The complete history lives in CHANGELOG.md in the plug
 and on the GitHub releases page.
 
 == Upgrade Notice ==
+
+= 0.8.1 =
+Plugin Check clean-up of the 0.8.0 package; no behaviour change. Safe for all users.
 
 = 0.8.0 =
 Adds the Post Runtime ingest step (`pre_upsert_records`) for scheduled, duplicate-free imports from other systems; needs Post Runtime Engine 0.9.0+. Existing workflows are unaffected.
