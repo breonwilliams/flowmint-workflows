@@ -122,7 +122,7 @@ class FMW_Step_Pre_Upsert_Records extends FMW_Step_Base {
         }
         foreach ( self::REQUIRED_MAP_KEYS as $key ) {
             if ( ! isset( $map[ $key ] ) ) {
-                throw new FMW_Step_Exception( 'config_error', "pre_upsert_records: map.{$key} is required." );
+                throw new FMW_Step_Exception( 'config_error', esc_html( "pre_upsert_records: map.{$key} is required." ) );
             }
         }
 
@@ -144,7 +144,7 @@ class FMW_Step_Pre_Upsert_Records extends FMW_Step_Base {
         if ( count( $records ) < $min ) {
             throw new FMW_Step_Exception(
                 'upstream_shape',
-                sprintf( 'pre_upsert_records: received %d record(s), expected at least %d. Nothing was drafted. The upstream feed is empty or its shape changed.', count( $records ), $min )
+                esc_html( sprintf( 'pre_upsert_records: received %d record(s), expected at least %d. Nothing was drafted. The upstream feed is empty or its shape changed.', count( $records ), $min ) )
             );
         }
         $max_ratio = isset( $this->config['max_failure_ratio'] ) ? (float) $this->config['max_failure_ratio'] : 0.1;
@@ -221,7 +221,7 @@ class FMW_Step_Pre_Upsert_Records extends FMW_Step_Base {
             $sample = array_slice( array_map( static function ( $f ) { return "#{$f['index']} ({$f['external_id']}): {$f['error']}"; }, $failed ), 0, 3 );
             throw new FMW_Step_Exception(
                 'upstream_shape',
-                sprintf(
+                esc_html( sprintf(
                     'pre_upsert_records: %d of %d record(s) failed (limit %d%%). %d created / %d updated / %d unchanged were kept; nothing was drafted. First failures: %s',
                     count( $failed ),
                     $total,
@@ -230,7 +230,7 @@ class FMW_Step_Pre_Upsert_Records extends FMW_Step_Base {
                     count( $updated ),
                     count( $unchanged ),
                     implode( ' | ', $sample )
-                )
+                ) )
             );
         }
 
