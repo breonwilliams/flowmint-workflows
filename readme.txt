@@ -4,7 +4,7 @@ Tags: workflow, automation, form submissions, async, action scheduler
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.7.0
+Stable tag: 0.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,10 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 
 == Changelog ==
 
+= 0.8.0 =
+* Added: the ingest step, `pre_upsert_records`. Takes the records a previous step fetched from a system of record, maps each one with a per-record template, and creates or updates the matching Post Runtime record by source and external id — so re-running a scheduled workflow never duplicates and an unchanged record is never rewritten. Two guards make an upstream change loud instead of silent, and records the upstream stops returning are kept or unpublished, never deleted. Requires Post Runtime Engine 0.9.0 or newer.
+* Changed: declares compatibility with WordPress 7.1.
+
 = 0.7.0 =
 * Added: workflow emails and messages can now use the option LABEL a visitor actually chose, not the value stored behind it. `{{ labels.workshop }}` writes "Hand-Cut Joinery Intensive" where `{{ data.workshop }}` writes "joinery". Machine steps keep using the raw value, so nothing existing changes.
 * Fixed: uploaded-file details in workflows are now documented as they actually behave — keyed by field name, with no file URL, and a shape that changes when more than one file is attached. Each of those failed silently before, producing a workflow that reported success while sending nothing.
@@ -82,14 +86,15 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 * New: Two-gate security model — connector defaults to disabled site-wide; admin opts in via the kill-switch toggle.
 * Plugin-checker compliance pass: wrapped exception messages in `esc_html()`, added `phpcs:disable/enable` blocks around repository SQL with dynamic table names, normalized file-system operations to WP_Filesystem where practical, and added context-specific `phpcs:ignore` reasons where direct PHP filesystem APIs are required (streaming uploads).
 
-= 0.4.0-rc7 — 2026-05-03 =
-* Added `drive_create_text_file` step type for creating small text/markdown/HTML files in Drive from in-memory strings.
 
 WordPress truncates this section at 5,000 characters, so it keeps a rolling window of the
 six most recent releases. The complete history lives in CHANGELOG.md in the plugin folder,
 and on the GitHub releases page.
 
 == Upgrade Notice ==
+
+= 0.8.0 =
+Adds the Post Runtime ingest step (`pre_upsert_records`) for scheduled, duplicate-free imports from other systems; needs Post Runtime Engine 0.9.0+. Existing workflows are unaffected.
 
 = 0.7.0 =
 Adds a `labels` namespace so workflow emails use the option text a visitor chose rather than the stored value. Corrects the documented shape of uploaded-file data, which was wrong in three ways that all failed silently. Additive; existing workflows are unaffected.

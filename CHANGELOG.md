@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-12
+
 ### Added
 
 - **`pre_upsert_records` — the ingest step (Post Runtime family).** Takes the
@@ -21,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   step, so this loops internally the way `fre_delete_entries` does.
   `{{ item }}` is a new context root, meaningful only inside such a step.
   Reference Pattern 8 documents the full scheduled workflow. Requires Post
-  Runtime Engine 0.8.2+.
+  Runtime Engine 0.9.0+ (the release that carries the upsert).
 
 ### Changed
 
