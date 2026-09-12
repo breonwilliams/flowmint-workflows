@@ -66,7 +66,12 @@ class WorkflowValidatorTest extends UnitTestCase {
      * Helper to build a minimal valid workflow config.
      */
     private function valid_config( array $overrides = array() ) {
+        // v0.6.0 made the trigger block required (a workflow with neither a
+        // trigger nor a legacy top-level form_id is rejected). These
+        // fixtures predate that and had been failing since; a form trigger
+        // is what every pre-v0.6 workflow normalises to.
         return array_merge( array(
+            'trigger' => array( 'type' => 'form', 'form_id' => 'test-form' ),
             'steps' => array(
                 array( 'name' => 'log_it', 'type' => 'log_info', 'config' => array() ),
             ),
@@ -107,6 +112,7 @@ class WorkflowValidatorTest extends UnitTestCase {
 
     public function test_step_must_be_array() {
         $result = \FMW_Workflow_Validator::validate( array(
+            'trigger' => array( 'type' => 'form', 'form_id' => 'test-form' ),
             'steps' => array( 'not-an-object' ),
         ) );
 
@@ -116,6 +122,7 @@ class WorkflowValidatorTest extends UnitTestCase {
 
     public function test_step_missing_name_fails() {
         $result = \FMW_Workflow_Validator::validate( array(
+            'trigger' => array( 'type' => 'form', 'form_id' => 'test-form' ),
             'steps' => array(
                 array( 'type' => 'log_info' ),  // no name
             ),
@@ -127,6 +134,7 @@ class WorkflowValidatorTest extends UnitTestCase {
 
     public function test_step_missing_type_fails() {
         $result = \FMW_Workflow_Validator::validate( array(
+            'trigger' => array( 'type' => 'form', 'form_id' => 'test-form' ),
             'steps' => array(
                 array( 'name' => 'unnamed_type' ),  // no type
             ),
@@ -138,6 +146,7 @@ class WorkflowValidatorTest extends UnitTestCase {
 
     public function test_unknown_step_type_fails() {
         $result = \FMW_Workflow_Validator::validate( array(
+            'trigger' => array( 'type' => 'form', 'form_id' => 'test-form' ),
             'steps' => array(
                 array(
                     'name'   => 'do_something',
@@ -153,6 +162,7 @@ class WorkflowValidatorTest extends UnitTestCase {
 
     public function test_duplicate_step_names_fail() {
         $result = \FMW_Workflow_Validator::validate( array(
+            'trigger' => array( 'type' => 'form', 'form_id' => 'test-form' ),
             'steps' => array(
                 array( 'name' => 'shared', 'type' => 'log_info', 'config' => array() ),
                 array( 'name' => 'shared', 'type' => 'log_warning', 'config' => array() ),
@@ -165,6 +175,7 @@ class WorkflowValidatorTest extends UnitTestCase {
 
     public function test_invalid_on_error_value_fails() {
         $result = \FMW_Workflow_Validator::validate( array(
+            'trigger' => array( 'type' => 'form', 'form_id' => 'test-form' ),
             'steps' => array(
                 array(
                     'name'     => 'risky',
@@ -182,6 +193,7 @@ class WorkflowValidatorTest extends UnitTestCase {
     public function test_each_allowed_on_error_value_passes() {
         foreach ( array( 'fail', 'continue', 'retry' ) as $allowed ) {
             $result = \FMW_Workflow_Validator::validate( array(
+                'trigger' => array( 'type' => 'form', 'form_id' => 'test-form' ),
                 'steps' => array(
                     array(
                         'name'     => 'step',
@@ -198,6 +210,7 @@ class WorkflowValidatorTest extends UnitTestCase {
 
     public function test_non_object_config_fails() {
         $result = \FMW_Workflow_Validator::validate( array(
+            'trigger' => array( 'type' => 'form', 'form_id' => 'test-form' ),
             'steps' => array(
                 array(
                     'name'   => 'step',
@@ -224,6 +237,7 @@ class WorkflowValidatorTest extends UnitTestCase {
 
     public function test_multi_step_valid_workflow_validates_cleanly() {
         $result = \FMW_Workflow_Validator::validate( array(
+            'trigger' => array( 'type' => 'form', 'form_id' => 'test-form' ),
             'settings' => array( 'max_retries' => 3 ),
             'steps'    => array(
                 array( 'name' => 'a', 'type' => 'log_info', 'config' => array() ),
@@ -247,6 +261,7 @@ class WorkflowValidatorTest extends UnitTestCase {
 
     public function test_warning_when_file_step_appears_after_delete_entry() {
         $result = \FMW_Workflow_Validator::validate( array(
+            'trigger' => array( 'type' => 'form', 'form_id' => 'test-form' ),
             'steps' => array(
                 array( 'name' => 'cleanup', 'type' => 'fre_delete_entry', 'config' => array() ),
                 array( 'name' => 'too_late', 'type' => 'drive_upload_file', 'config' => array() ),
@@ -261,6 +276,7 @@ class WorkflowValidatorTest extends UnitTestCase {
 
     public function test_no_warning_when_file_step_precedes_delete_entry() {
         $result = \FMW_Workflow_Validator::validate( array(
+            'trigger' => array( 'type' => 'form', 'form_id' => 'test-form' ),
             'steps' => array(
                 array( 'name' => 'upload', 'type' => 'drive_upload_file', 'config' => array() ),
                 array( 'name' => 'cleanup', 'type' => 'fre_delete_entry', 'config' => array() ),
