@@ -126,6 +126,18 @@ class PreUpsertRecordsTest extends UnitTestCase {
         $this->assertSame( 1, $out['unchanged_count'] );
     }
 
+    public function test_featured_image_url_is_mapped_through_to_the_record() {
+        $map = [
+            'external_id'        => '{{ item.id }}',
+            'title'              => '{{ item.name }}',
+            'featured_image_url' => '{{ item.photo }}',
+        ];
+        $out = $this->run_step( [ 'map' => $map ], [ [ 'id' => 1, 'name' => 'Soccer', 'photo' => 'https://cdn.example.org/p/soccer.jpg' ] ] );
+        $this->assertSame( 1, $out['created_count'] );
+        $this->assertSame( 'https://cdn.example.org/p/soccer.jpg', $this->post_data->calls[0]['record']['featured_image_url'], 'the URL reaches upsert_external, which sideloads it once per URL' );
+        $this->assertArrayNotHasKey( 'featured_image_id', $this->post_data->calls[0]['record'], 'only mapped keys are sent' );
+    }
+
     public function test_missing_optional_path_is_a_warning_not_a_failure() {
         $out = $this->run_step( [], [ [ 'id' => 1, 'name' => 'Soccer' ] ] );
         $this->assertSame( 1, $out['created_count'] );
