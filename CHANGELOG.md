@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`pre_upsert_records` maps `featured_image_url`.** A feed that supplies
+  photo URLs can map them per record; Post Runtime (0.10.0+) sideloads each
+  URL into the media library once — a re-run with the same URL reuses the
+  attachment — and sets it as the record's featured image. A URL that
+  cannot be fetched or is not an image is a per-record warning, not a
+  failure, so the record is still written. Closes the "image sideloading for
+  ingest" follow-up in the external-ingest pattern.
+
 ## [0.8.1] - 2026-09-12
 
 ### Fixed

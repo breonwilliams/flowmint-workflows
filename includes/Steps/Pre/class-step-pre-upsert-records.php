@@ -54,7 +54,7 @@ class FMW_Step_Pre_Upsert_Records extends FMW_Step_Base {
                 'records'   => [ 'type' => 'array', 'description' => 'The records to upsert, usually {{ steps.fetch.body }} or {{ steps.fetch.body.items }}.' ],
                 'map'       => [
                     'type'        => 'object',
-                    'description' => 'Per-record template. Keys: external_id (required), title (required), content, excerpt, status, fields {field_key: value}, taxonomies {taxonomy: [terms]}, featured_image_id. Values may use {{ item.* }} for the current record and any other context path.',
+                    'description' => 'Per-record template. Keys: external_id (required), title (required), content, excerpt, status, fields {field_key: value}, taxonomies {taxonomy: [terms]}, featured_image_id, featured_image_url (a feed\'s photo URL — Post Runtime sideloads it once per URL and sets it as the featured image; a URL that fails is a per-record warning, not a failure). Values may use {{ item.* }} for the current record and any other context path.',
                     'properties'  => [
                         'external_id'       => [ 'type' => 'string' ],
                         'title'             => [ 'type' => 'string' ],
@@ -64,6 +64,7 @@ class FMW_Step_Pre_Upsert_Records extends FMW_Step_Base {
                         'fields'            => [ 'type' => 'object' ],
                         'taxonomies'        => [ 'type' => 'object' ],
                         'featured_image_id' => [ 'type' => 'integer' ],
+                        'featured_image_url' => [ 'type' => 'string' ],
                     ],
                 ],
                 'expect_min_records' => [ 'type' => 'integer', 'default' => 1, 'minimum' => 0, 'description' => 'Fail the step if fewer records arrive. Set to what an empty feed would NEVER legitimately be. Default 1.' ],
@@ -180,7 +181,7 @@ class FMW_Step_Pre_Upsert_Records extends FMW_Step_Base {
             }
 
             $payload = [ 'title' => $title ];
-            foreach ( [ 'content', 'excerpt', 'status', 'fields', 'taxonomies', 'featured_image_id' ] as $key ) {
+            foreach ( [ 'content', 'excerpt', 'status', 'fields', 'taxonomies', 'featured_image_id', 'featured_image_url' ] as $key ) {
                 if ( array_key_exists( $key, $mapped ) ) {
                     $payload[ $key ] = $mapped[ $key ];
                 }
