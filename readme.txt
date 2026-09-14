@@ -4,7 +4,7 @@ Tags: workflow, automation, form submissions, async, action scheduler
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 0.8.1
+Stable tag: 0.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,9 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 
 == Changelog ==
 
+= 0.9.0 =
+* Added: the ingest step `pre_upsert_records` maps a photo URL per record (`featured_image_url`). Post Runtime downloads each image once, reuses it on every later run and sets it as the record's featured image; a URL that fails is a per-record warning, not a failure. Requires Post Runtime Engine 0.10.0 or newer for the image.
+
 = 0.8.1 =
 * Fixed: four Plugin Check errors in the 0.8.0 package (unescaped exception messages in the ingest step). No behaviour change.
 
@@ -75,15 +78,6 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 = 0.6.7 =
 * Internal: developer/AI reference documentation (AGENTS.md) is now maintained in the repository. No functional changes.
 
-= 0.6.0 — 2026-05-15 =
-* **New: Scheduled workflow triggers.** Workflows can now fire on a recurring schedule (`hourly` / `twicedaily` / `daily` / `weekly`) in addition to form submissions. Two trigger types in v0.6: `{ type: "form", form_id: "…" }` (existing pattern, explicit) and `{ type: "schedule", interval: "…", hour: …, minute: …, day_of_week: … }` (new). Existing form-triggered workflows are normalized into the new shape transparently; no JSON changes required.
-* **New step types:** `fre_list_entries` (query FE entries by form, status, and age) and `fre_delete_entries` (bulk-delete, idempotent, per-id failure tolerant). Designed for retention workflows — typical chain is `fre_list_entries → fre_delete_entries → log_info`.
-* **New class:** `FMW_Schedule_Listener` — registers Action Scheduler recurring events on workflow save/enable, unschedules on disable/delete, handles tick dispatch through to the existing executor.
-* **New database column:** `wp_fmw_workflows.trigger_type VARCHAR(32) DEFAULT 'form'` plus index `idx_trigger_type (trigger_type, enabled)`. Existing `form_id` column made nullable. Migration is additive and idempotent.
-* **New REST surface:** `/preflight` reports `supported_trigger_types: ["form", "schedule"]`; `/workflows` accepts a `trigger_type` filter; create/update accept the new `trigger` block at the wrapper level or inside the config JSON.
-* **Daily reconciliation:** an `fmw_reconcile_scheduled_events` AS recurring action reconciles AS events with the workflows table, providing drift correction for the rare case where an event was lost.
-* Full design contract: `docs/DESIGN_SCHEDULED_TRIGGERS.md`. User guide: `docs/SCHEDULED_WORKFLOWS.md`.
-
 
 
 WordPress truncates this section at 5,000 characters, so it keeps a rolling window of the
@@ -91,6 +85,9 @@ six most recent releases. The complete history lives in CHANGELOG.md in the plug
 and on the GitHub releases page.
 
 == Upgrade Notice ==
+
+= 0.9.0 =
+Imports can map a photo URL per record; Post Runtime downloads each image once and sets it as the featured image (needs Post Runtime Engine 0.10.0+). Existing workflows are unaffected.
 
 = 0.8.1 =
 Plugin Check clean-up of the 0.8.0 package; no behaviour change. Safe for all users.
@@ -107,9 +104,3 @@ Adds failure notifications: when a workflow run permanently fails, FlowMint now 
 
 = 0.6.1 =
 Connector admin page UI polish — renamed to vendor-neutral "Connector" / "The FlowMint Connector" naming, new card-based layout with clearer 3-step setup flow. No behavior changes.
-
-= 0.6.0 =
-Adds scheduled workflow triggers (hourly / daily / weekly / twicedaily) and two step types for bulk-querying and deleting form entries. An additive, idempotent migration runs on first load. Existing workflows are unaffected; rolling back to 0.5.0 needs no database change.
-
-= 0.5.0 =
-Adds the Claude Cowork MCP connector and full Plugin Check compliance pass. No behavior changes for existing workflows.
