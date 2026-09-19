@@ -115,7 +115,7 @@ When FormEngine releases a new version, FlowMint Workflows is tested against it 
 | Workflow run steps (`wp_fmw_workflow_run_steps`) | FlowMint Workflows |
 | API credentials (`wp_options` `fmw_credential_*`) | FlowMint Workflows |
 
-When FMW is uninstalled (`uninstall.php`), only FMW-owned tables are dropped. FRE data is left untouched.
+When FMW is uninstalled (`uninstall.php`), FRE data is never touched. FMW's own tables are kept unless `FMW_REMOVE_ALL_DATA` is defined, and then only FMW-owned tables are dropped.
 
 When FRE is uninstalled, FMW's run history that references deleted entries becomes "orphaned" — the entry_id field still exists but the entry it references is gone. The run history table is preserved (don't lose audit trail). The admin UI gracefully handles missing entries by showing "Entry deleted" in the run detail view.
 
