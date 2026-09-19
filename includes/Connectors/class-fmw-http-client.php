@@ -201,15 +201,15 @@ class FMW_Http_Client {
                 }
                 break;
             default:
-                throw new FMW_Step_Exception( 'config_error', "HTTP request: auth.scheme must be bearer, header or basic (got '{$scheme}')." );
+                throw new FMW_Step_Exception( 'config_error', sprintf( "HTTP request: auth.scheme must be bearer, header or basic (got '%s').", esc_html( $scheme ) ) );
         }
 
         $secret = FMW_Credential_Store::get( 'http_' . $name );
         if ( is_wp_error( $secret ) ) {
-            throw new FMW_Step_Exception( 'credential_unreadable', "HTTP request: the credential '{$name}' is stored but cannot be decrypted — usually the site's security keys changed. Store it again." );
+            throw new FMW_Step_Exception( 'credential_unreadable', sprintf( "HTTP request: the credential '%s' is stored but cannot be decrypted — usually the site's security keys changed. Store it again.", esc_html( $name ) ) );
         }
         if ( null === $secret || '' === $secret ) {
-            throw new FMW_Step_Exception( 'credential_not_configured', "HTTP request: no credential named '{$name}' is stored (credential key http_{$name})." );
+            throw new FMW_Step_Exception( 'credential_not_configured', sprintf( "HTTP request: no credential named '%s' is stored (credential key http_%s).", esc_html( $name ), esc_html( $name ) ) );
         }
 
         if ( 'bearer' === $scheme ) {

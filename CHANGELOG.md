@@ -52,6 +52,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   a dependency that needs more. CI lints on 8.1 and 8.2.
 
 ### Fixed
+- **Plugin Check reported three errors on the release build.** The new
+  credential messages carried the step's `auth` values unescaped; they are
+  escaped now, and two table-name queries carry the reason they are safe.
 
 - **Retries never happened, and a "retried" run was lost from view.** A
   retryable failure with retries left set the run to `queued` and rethrew,

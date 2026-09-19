@@ -182,7 +182,7 @@ class FMW_Schema {
         // and wp_date() formats in the same timezone.
         $cut   = wp_date( 'Y-m-d H:i:s', time() - HOUR_IN_SECONDS );
 
-        // phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- $runs is a $wpdb->prefix-derived table name (plugin-controlled); values flow through prepare().
+        // phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter -- $runs is a $wpdb->prefix-derived table name (plugin-controlled); values flow through prepare().
         $stranded = (int) $wpdb->query( $wpdb->prepare(
             "UPDATE {$runs} SET status = 'failed', completed_at = %s, error_code = 'retry_stranded',
                 error_message = %s
@@ -199,7 +199,7 @@ class FMW_Schema {
             'This run stopped part-way (a PHP error or a timeout) and was never marked finished. Check which steps completed before replaying it.',
             $cut
         ) );
-        // phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        // phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, PluginCheck.Security.DirectDB.UnescapedDBParameter
 
         $total = $stranded + $interrupted;
         if ( $total > 0 ) {
