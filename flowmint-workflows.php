@@ -38,7 +38,13 @@ define( 'FMW_VERSION', '0.9.0' );
 // intentionally has no migrate_to_0_3_0() branch — create_tables() is
 // idempotent and the 0.2.0 branch is version-gated, so a no-DDL bump
 // is safe. This is not a version/code mismatch.
-define( 'FMW_DB_VERSION', '0.3.0' );
+// 0.4.0 (2026-09-19) — Retries that actually run. Adds nullable
+// `checkpoint` + `resume_step_index` to wp_fmw_workflow_runs (the context
+// after the last completed top-level step, so a retry resumes at the
+// failed step instead of re-running the workflow), and repairs runs the
+// old retry path stranded in `queued` / `running`. See
+// FMW_Schema::migrate_to_0_4_0().
+define( 'FMW_DB_VERSION', '0.4.0' );
 
 // Plugin paths and URLs.
 define( 'FMW_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );

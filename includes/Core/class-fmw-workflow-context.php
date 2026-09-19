@@ -409,7 +409,27 @@ class FMW_Workflow_Context {
     }
 
     /**
-     * Snapshot the entire context as an associative array for run history.
+     * Load the state a checkpoint recorded (see snapshot()), so a retried
+     * run resumes at the step that failed with the context the completed
+     * steps left behind.
+     *
+     * @param array $snapshot A snapshot() array.
+     */
+    public function restore( array $snapshot ) {
+        // Everything a later step can read comes back exactly as it was when
+        // the checkpoint was taken — the entry as loaded then, the outputs of
+        // the steps that completed, the variables they set. `run` is NOT
+        // restored: the retry is the same run, but its start time is now.
+        // `env` is rebuilt by the constructor (site settings, never stale).
+        foreach ( [ 'workflow', 'form', 'entry', 'entry_files', 'data', 'labels', 'steps', 'vars' ] as $key ) {
+            if ( isset( $snapshot[ $key ] ) && is_array( $snapshot[ $key ] ) ) {
+                $this->{$key} = $snapshot[ $key ];
+            }
+        }
+    }
+
+    /**
+     * Everything a step can read, as a plain array (run history, checkpoints).
      *
      * @return array
      */

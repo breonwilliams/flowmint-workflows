@@ -71,6 +71,8 @@ class FMW_Step_Exception extends Exception {
             'file_not_readable',
             'template_not_found',
             'invalid_input',
+            'php_error',         // A PHP Error in a step is a bug; retrying repeats it.
+            'workflow_changed',  // The workflow was edited while a retry waited.
         ];
         return ! in_array( $this->error_code, $non_retryable, true );
     }

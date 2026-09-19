@@ -57,7 +57,17 @@ class FMW_REST_Runs {
 
         $result = FMW_Run_Repository::list( $args );
 
-        return rest_ensure_response( FMW_REST_Auth::success( $result['items'], [
+        // The resume checkpoint is a full context snapshot — kept off list
+        // rows (GET /runs/{id} returns it) so a page of runs stays small.
+        $items = array_map(
+            static function ( $row ) {
+                unset( $row['checkpoint'] );
+                return $row;
+            },
+            (array) $result['items']
+        );
+
+        return rest_ensure_response( FMW_REST_Auth::success( $items, [
             'total'    => $result['total'],
             'page'     => $args['page'],
             'per_page' => $args['per_page'],

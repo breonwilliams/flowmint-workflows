@@ -148,28 +148,29 @@ Scheduler. Workflow runs become near-instant after submission.
 **For client onboarding:** include cron setup as part of the deployment
 checklist. Don't ship FMW to production without a real cron.
 
-### Run stuck in Queued (automatic retries do not happen)
+### Retries
 
-**Symptom:** a run stays **Queued** in Run History indefinitely, and its
-`fmw_run_workflow` action (Tools → Scheduled Actions, group `fmw`) shows
-**Failed**. No failure alert was sent, and **Replay** refuses the run
-(`cannot_replay` — only failed, cancelled or completed runs replay).
+Only a step with `"on_error": "retry"` is retried, and only for a retryable
+error (a timeout, a 5xx, `upstream_shape` — not a 4xx, a bad config or a
+`php_error`) while `settings.max_retries` (default 3) allows. The retry is
+its own `fmw_run_workflow` action in Tools → Scheduled Actions (group
+`fmw`), due after 1, 5, then 15 minutes (`FMW_Workflow_Job::RETRY_DELAYS`,
+filter `fmw_retry_delay_seconds`). It resumes at the failed step from the
+checkpoint the run saved after its last completed step. Every other failure
+is final at once: **Failed**, alerted, replayable.
 
-**Cause:** when a run fails with a retryable error (anything not in
-`FMW_Step_Exception::is_retryable`'s list — e.g. `external_5xx`, a
-timeout, `upstream_shape`) and `retry_count` is below
-`settings.max_retries` (default 3), `FMW_Workflow_Job::handle_failure`
-sets the run back to `queued` and rethrows so that Action Scheduler would
-retry it. Action Scheduler does not retry a one-off async action: it
-marks the action failed and never runs it again. The run is left queued,
-never reaches `failed`, so `fmw_workflow_run_failed` — and the alert —
-never fire. A fix is pending a decision.
-
-**Workaround:** set `"settings": { "max_retries": 0 }` in every
-workflow's config. Every failure is then final: the run is marked
-**Failed**, the alert goes out, and it can be replayed once the cause is
-fixed. Nothing is lost by this — the retry the setting promised was never
-happening.
+- **A run shows Queued with an error on it.** It is waiting for its next
+  retry; the scheduled action shows when.
+- **`workflow_changed`.** The workflow's steps were edited while a retry
+  waited; resuming could skip or repeat the wrong step. Replay the run.
+- **`retry_stranded` / `interrupted` on old runs after updating to 0.10.0.**
+  Before 0.10.0 a retryable failure was set to `queued` and rethrown into
+  Action Scheduler, which never retries a one-off action — the run stayed
+  Queued for good, with no alert and no replay. The update marks those runs
+  `retry_stranded`, and runs left `running` for over an hour `interrupted`,
+  without alerting (so an upgrade does not mail every old failure at once);
+  a notice on Run History gives the count. Replay the ones that still
+  matter.
 
 ### Composer's `platform_check.php` can lock the plugin to one PHP version
 

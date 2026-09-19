@@ -81,6 +81,8 @@ class FMW_Schema {
             retry_count smallint(5) UNSIGNED NOT NULL DEFAULT 0,
             parent_run_id bigint(20) UNSIGNED NULL,
             context_snapshot longtext NULL,
+            checkpoint longtext NULL,
+            resume_step_index smallint(5) UNSIGNED NULL,
             created_at datetime NOT NULL,
             PRIMARY KEY  (id),
             KEY idx_workflow_created (workflow_id, created_at),
@@ -137,10 +139,83 @@ class FMW_Schema {
             self::migrate_to_0_2_0();
         }
 
+        // v0.3.0 → v0.4.0 — Retries that run (plugin 0.10.0). The two new
+        // run columns come from create_tables() above (dbDelta adds
+        // columns); this branch repairs the runs the old path stranded.
+        if ( version_compare( $from, '0.4.0', '<' ) ) {
+            self::migrate_to_0_4_0();
+        }
+
         FMW_Logger::info( 'Database migrated', [
             'from' => $from,
             'to'   => $to,
         ] );
+    }
+
+    /**
+     * v0.3.0 → v0.4.0 — repair runs stranded by the old retry path.
+     *
+     * Before 0.10.0, a retryable failure with retries left set the run to
+     * `queued` and rethrew, expecting Action Scheduler to run it again. AS
+     * never retries a one-off action, so the run stayed `queued` for good:
+     * no alert, and replay refuses unfinished runs. Only that path ever set
+     * `queued` with retry_count > 0, so those rows are exactly the stranded
+     * ones. A run left `running` for over an hour was killed mid-run (a PHP
+     * Error the job didn't catch, a fatal, a timeout).
+     *
+     * Both become `failed` with an explanatory code, so they show in Run
+     * History and can be REPLAYED. No alert is sent for them — an upgrade
+     * must not mail the owner every old failure at once; an admin notice on
+     * FlowMint's screens reports the count instead (see
+     * FMW_Admin_Runs::stranded_runs_notice()).
+     *
+     * Idempotent: a second pass finds nothing to repair.
+     *
+     * @return int Number of runs repaired.
+     */
+    public static function migrate_to_0_4_0() {
+        global $wpdb;
+
+        $runs  = self::get_table_names()['workflow_runs'];
+        $now   = current_time( 'mysql' );
+        // started_at is written with current_time( 'mysql' ) — site-local —
+        // and wp_date() formats in the same timezone.
+        $cut   = wp_date( 'Y-m-d H:i:s', time() - HOUR_IN_SECONDS );
+
+        // phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- $runs is a $wpdb->prefix-derived table name (plugin-controlled); values flow through prepare().
+        $stranded = (int) $wpdb->query( $wpdb->prepare(
+            "UPDATE {$runs} SET status = 'failed', completed_at = %s, error_code = 'retry_stranded',
+                error_message = %s
+             WHERE status = 'queued' AND retry_count > 0",
+            $now,
+            'This run hit a retryable error and was set to wait for a retry that FlowMint before 0.10.0 never ran. Nothing was lost from the form entry; replay the run to finish it.'
+        ) );
+
+        $interrupted = (int) $wpdb->query( $wpdb->prepare(
+            "UPDATE {$runs} SET status = 'failed', completed_at = %s, error_code = 'interrupted',
+                error_message = %s
+             WHERE status = 'running' AND started_at IS NOT NULL AND started_at < %s",
+            $now,
+            'This run stopped part-way (a PHP error or a timeout) and was never marked finished. Check which steps completed before replaying it.',
+            $cut
+        ) );
+        // phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+
+        $total = $stranded + $interrupted;
+        if ( $total > 0 ) {
+            update_option( 'fmw_repaired_runs', [
+                'stranded'    => $stranded,
+                'interrupted' => $interrupted,
+                'at'          => $now,
+            ], false );
+        }
+
+        FMW_Logger::info( 'Repaired runs left unfinished by the old retry path', [
+            'stranded'    => $stranded,
+            'interrupted' => $interrupted,
+        ] );
+
+        return $total;
     }
 
     /**

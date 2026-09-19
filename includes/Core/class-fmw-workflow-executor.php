@@ -18,19 +18,48 @@ if ( ! defined( 'ABSPATH' ) ) {
 class FMW_Workflow_Executor {
 
     /**
+     * The step whose failure ended the last execute() call: index, name,
+     * type and its on_error policy. Null when execute() returned normally.
+     * The job reads it to decide retry vs fail (only `on_error: retry`
+     * retries) and to resume at this index.
+     *
+     * @var array|null
+     */
+    private $failed_step = null;
+
+    /**
      * Execute a workflow against a context.
+     *
+     * Options (top-level runs only — control-flow steps call execute() for
+     * their nested lists without options, so nested steps never checkpoint
+     * or resume on their own):
+     *   - start_index  (int)      Skip the steps before this index; a retry
+     *                             resumes at the step that failed.
+     *   - on_step_done (callable) Called as fn( int $next_index ) after each
+     *                             step finishes (success, skip, or
+     *                             on_error:continue), so the caller can
+     *                             checkpoint the context.
      *
      * @param FMW_Workflow         $workflow
      * @param FMW_Workflow_Context $context
+     * @param array                $options
      * @throws FMW_Step_Exception On step failure that should fail the run.
      */
-    public function execute( FMW_Workflow $workflow, FMW_Workflow_Context $context ) {
-        $steps    = $workflow->steps();
-        $registry = FMW_Step_Registry::instance();
-        $interp   = new FMW_Interpolator( $context );
-        $expr     = new FMW_Expression( $interp );
+    public function execute( FMW_Workflow $workflow, FMW_Workflow_Context $context, array $options = [] ) {
+        $steps       = $workflow->steps();
+        $registry    = FMW_Step_Registry::instance();
+        $interp      = new FMW_Interpolator( $context );
+        $expr        = new FMW_Expression( $interp );
+        $start_index = isset( $options['start_index'] ) ? max( 0, (int) $options['start_index'] ) : 0;
+        $on_done     = isset( $options['on_step_done'] ) && is_callable( $options['on_step_done'] ) ? $options['on_step_done'] : null;
+
+        $this->failed_step = null;
 
         foreach ( $steps as $idx => $step_def ) {
+            if ( $idx < $start_index ) {
+                continue;
+            }
+
             $step_name = $step_def['name'] ?? "step_{$idx}";
             $step_type = $step_def['type'] ?? '';
 
@@ -57,6 +86,9 @@ class FMW_Workflow_Executor {
                         'step_name' => $step_name,
                         'reason'    => 'skip_if',
                     ] );
+                    if ( $on_done ) {
+                        $on_done( $idx + 1 );
+                    }
                     continue;
                 }
             }
@@ -136,15 +168,25 @@ class FMW_Workflow_Executor {
                     ] );
                     // Empty output for downstream references.
                     $context->set_step_output( $step_name, [ 'failed' => true, 'error' => $e->get_error_code() ] );
+                    if ( $on_done ) {
+                        $on_done( $idx + 1 );
+                    }
                     continue;
                 }
 
-                // 'fail' or 'retry' both end up rethrowing so the job handler can decide.
+                // 'fail' or 'retry': the job decides, from failed_step().
+                $this->failed_step = self::failure_record( $idx, $step_name, $step_type, $policy );
                 throw $e;
-            } catch ( Exception $e ) {
-                // Unexpected exception — wrap in FMW_Step_Exception.
+            } catch ( Throwable $e ) {
+                // Anything else a step throws. An Exception is 'unexpected'
+                // (retryable — a library's transport error, say); a PHP
+                // Error (TypeError, ValueError…) is a bug in the step and
+                // 'php_error', which no retry can fix. Before 0.10.0 Errors
+                // were not caught here at all: the step record stayed
+                // `pending` and the run stayed `running` for good.
                 $duration_ms = (int) ( ( microtime( true ) - $started_at ) * 1000 );
-                $wrapped = new FMW_Step_Exception( 'unexpected', $e->getMessage(), [ 'previous' => get_class( $e ) ] );
+                $code        = $e instanceof Error ? 'php_error' : 'unexpected';
+                $wrapped     = new FMW_Step_Exception( $code, $e->getMessage(), [ 'previous' => get_class( $e ) ] );
 
                 FMW_Run_Step_Repository::mark_failure(
                     $step_record_id,
@@ -154,13 +196,17 @@ class FMW_Workflow_Executor {
                 );
 
                 do_action( 'fmw_step_failed',
-                    $context->get_run_id(), $step_name, $step_type, 'unexpected', $e->getMessage() );
+                    $context->get_run_id(), $step_name, $step_type, $code, $e->getMessage() );
 
                 if ( $step->get_on_error() === 'continue' ) {
-                    $context->set_step_output( $step_name, [ 'failed' => true, 'error' => 'unexpected' ] );
+                    $context->set_step_output( $step_name, [ 'failed' => true, 'error' => $code ] );
+                    if ( $on_done ) {
+                        $on_done( $idx + 1 );
+                    }
                     continue;
                 }
 
+                $this->failed_step = self::failure_record( $idx, $step_name, $step_type, $step->get_on_error() );
                 throw $wrapped;
             }
 
@@ -183,7 +229,36 @@ class FMW_Workflow_Executor {
 
             do_action( 'fmw_step_completed',
                 $context->get_run_id(), $step_name, $step_type, $output );
+
+            if ( $on_done ) {
+                $on_done( $idx + 1 );
+            }
         }
+    }
+
+    /**
+     * The step whose failure ended the last execute(), or null.
+     *
+     * @return array|null { index, name, type, on_error }
+     */
+    public function failed_step() {
+        return $this->failed_step;
+    }
+
+    /**
+     * @param int    $idx
+     * @param string $name
+     * @param string $type
+     * @param string $on_error
+     * @return array
+     */
+    private static function failure_record( $idx, $name, $type, $on_error ) {
+        return [
+            'index'    => (int) $idx,
+            'name'     => (string) $name,
+            'type'     => (string) $type,
+            'on_error' => (string) $on_error,
+        ];
     }
 
     /**

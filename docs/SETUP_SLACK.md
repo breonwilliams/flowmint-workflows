@@ -61,7 +61,7 @@ One alert per run that fails **for good** (`fmw_workflow_run_failed`, fired by `
 **Two gaps to know about:**
 
 - **Slack OR email, never both.** When `slack_webhook` is set, the alert goes to Slack only. The post is sent without waiting for Slack's reply, so if Slack rejects it (webhook revoked, channel archived) the alert is lost — no email is sent in its place (`FMW_Failure_Notifier`).
-- **A run that is still marked for retry sends no alert.** Automatic retries currently strand a run in Queued, where it never fails for good and so never alerts. Set `"max_retries": 0` in each workflow's `settings` until that is fixed — see `TROUBLESHOOTING.md`, "Run stuck in Queued".
+- **A run waiting to retry sends no alert yet.** A step with `on_error: "retry"` is retried first (after 1, 5, then 15 minutes); the alert goes out only if the last retry fails too. Steps with the default `fail` alert at once.
 
 ## What the Slack message looks like
 
@@ -122,7 +122,7 @@ A workflow that should post to Slack as part of its normal flow (e.g., "new high
 ### Real failures don't reach Slack
 
 In order:
-- Is the run actually **Failed**? A run sitting in **Queued** has not failed for good and sends nothing — see `TROUBLESHOOTING.md`, "Run stuck in Queued".
+- Is the run actually **Failed**? A run sitting in **Queued** is waiting to retry and has not failed for good — see `TROUBLESHOOTING.md`, "Retries".
 - Is the webhook still valid? Post to it by hand (Step 2). If Slack rejects it, FlowMint drops the alert silently.
 - Does something on the site return false from `fmw_failure_notification_enabled`?
 

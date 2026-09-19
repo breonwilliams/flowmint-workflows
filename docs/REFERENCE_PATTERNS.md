@@ -224,7 +224,7 @@ A homeowner fills out a "request a quote" form. The workflow:
 ```
 
 Notes:
-- `crm_sync.on_error` defaults to `fail` — if the CRM is down, the run fails. Automatic retries do not currently work (a retryable failure strands the run in Queued with no alert), so set `"settings": { "max_retries": 0 }` to make every failure final, alerted and replayable — see `TROUBLESHOOTING.md`, "Run stuck in Queued".
+- `crm_sync.on_error` defaults to `fail` — if the CRM is down, the run fails at once and alerts. To ride out a short outage instead, set `"on_error": "retry"` on it: the run is retried from `crm_sync` after 1, 5 and 15 minutes (up to `settings.max_retries`), without re-running the steps before it.
 - `upload_photos.on_error` is `continue` — if photo upload fails, we still want the rest of the lead processing to complete. The lead is logged for manual upload later.
 - The CRM token and the team Slack webhook URL are written into the steps' config. `{{ env.* }}` holds only `site_name`, `site_url` and `admin_email`, so a credential cannot be read from it (a missing path resolves to an empty string), and HTTP steps have no credential option. The token is therefore stored in the workflow config and recorded in each run's step config — use one scoped to the minimum access the step needs. (The `slack_webhook` credential is used only for FlowMint's own failure alerts.)
 
@@ -472,7 +472,6 @@ Each upload step has a `skip_if` that checks for file existence before attemptin
 ```json
 {
   "trigger": { "type": "schedule", "interval": "daily", "hour": 4, "minute": 30 },
-  "settings": { "max_retries": 0 },
   "steps": [
     {
       "name": "fetch",
@@ -521,7 +520,7 @@ Each upload step has a `skip_if` that checks for file existence before attemptin
 
 **What makes it safe to re-run:** identity is `(post_type, source, external_id)`, kept on the record by Post Runtime. Same feed → every record `unchanged`, nothing written. Changed record → `updated`, only the mapped keys. An editor's local edit to a field the map does not name survives.
 
-**What makes a change upstream loud:** `expect_min_records` catches an empty or re-shaped feed; `max_failure_ratio` catches a renamed field. Either fails the run with `upstream_shape` and nothing is drafted. That code is retryable, so the failure notifier fires only with `"max_retries": 0` as above — otherwise the run is stranded in Queued with no alert (`TROUBLESHOOTING.md`, "Run stuck in Queued").
+**What makes a change upstream loud:** `expect_min_records` catches an empty or re-shaped feed; `max_failure_ratio` catches a renamed field. Either fails the run with `upstream_shape` and nothing is drafted; with the steps' default `on_error: "fail"` the alert goes out at once. Do not put `on_error: "retry"` on the import step — a re-shaped feed will not fix itself in 15 minutes. `fetch` can take `retry` to ride out a vendor outage.
 
 **Do not** map a field you do not want overwritten every day, set `missing_upstream: "draft"` before the first few runs look right, or change `source` once records exist (it is part of their identity).
 

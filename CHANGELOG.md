@@ -21,6 +21,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Retries never happened, and a "retried" run was lost from view.** A
+  retryable failure with retries left set the run to `queued` and rethrew,
+  expecting Action Scheduler to retry it. Action Scheduler never retries a
+  one-off action, so the run sat in Queued for good: no alert, no replay
+  (Local run 6 had waited since 2026-09-02). Now:
+  - **Only `on_error: "retry"` retries** — the contract ARCHITECTURE.md has
+    stated since 0.4.0. `fail`, the default, fails the run at once: it is
+    marked Failed, alerted and replayable. For a workflow on defaults this
+    is the change: where a network error used to leave the run stuck in
+    Queued "for a retry", it now fails and alerts. Nothing that ran before
+    stops running — no retry ever ran.
+  - **A retry is its own scheduled action**, after 1, 5, then 15 minutes
+    (`FMW_Workflow_Job::RETRY_DELAYS`, filter `fmw_retry_delay_seconds`), up
+    to `settings.max_retries` (default 3); while it waits the run shows
+    Queued with the error and failed step. New action
+    `fmw_workflow_run_retry_scheduled`.
+  - **A retry resumes at the step that failed.** The executor reports each
+    completed top-level step and the job checkpoints the context (step
+    outputs, variables, entry) on the run; the retry restores it, so the
+    emails, records and quotes of the earlier steps are not repeated. The
+    failed step runs again, as does a whole `conditional`/`try_catch` that
+    failed part-way. A retry whose workflow was edited meanwhile fails with
+    `workflow_changed` instead of resuming at a shifted step.
+  - **A PHP `Error` in a step** (TypeError…) is caught as `php_error`,
+    non-retryable, instead of escaping and leaving the run `running` and the
+    step `pending` for good.
+  - **Existing stranded runs are repaired** by the `FMW_DB_VERSION` 0.4.0
+    migration: `queued` runs with a retry count become Failed
+    `retry_stranded`, and runs `running` for over an hour become Failed
+    `interrupted` — both replayable, without alerting (an upgrade must not
+    mail every old failure at once); a notice on Run History gives the
+    count. New nullable run columns `checkpoint`, `resume_step_index`
+    (dbDelta; the checkpoint is left off `GET /runs` list rows).
+  - The preflight gains an `error_policy` rule, and CONNECTOR_API,
+    ARCHITECTURE, TROUBLESHOOTING, CLAUDE, SETUP_* and the patterns no
+    longer recommend `max_retries: 0` as a workaround.
+  `tests/Unit/RetryResumeTest.php`; verified on Local end to end (19
+  checks: retry and resume, default fail and alert, retries exhausted,
+  edited workflow, the migration) and with Action Scheduler itself firing
+  the retry.
+
 Found writing the user documentation (2026-09-19), each checked in the code:
 
 - **`{{ workflow.title }}` and `{{ form.title }}` were always empty.**

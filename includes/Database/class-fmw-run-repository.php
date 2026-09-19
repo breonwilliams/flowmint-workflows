@@ -220,6 +220,9 @@ class FMW_Run_Repository {
         return self::update_status( $run_id, 'completed', [
             'completed_at'     => current_time( 'mysql' ),
             'duration_ms'      => (int) $duration_ms,
+            // The final snapshot supersedes the resume point.
+            'checkpoint'        => null,
+            'resume_step_index' => null,
             'context_snapshot' => $context_snapshot,
         ] );
     }
@@ -242,6 +245,56 @@ class FMW_Run_Repository {
             'failed_step'      => $failed_step,
             'context_snapshot' => $context_snapshot,
         ] );
+    }
+
+    /**
+     * Record where a run can resume: the context after its last completed
+     * top-level step, and the index of the next one. Written after every
+     * top-level step, so a retry re-runs only the step that failed and what
+     * follows it — never the emails or records the earlier steps produced.
+     *
+     * @param int    $run_id
+     * @param int    $next_index  Index of the next top-level step.
+     * @param string $checkpoint  JSON: { context, workflow_hash }.
+     * @return bool
+     */
+    public static function save_checkpoint( $run_id, $next_index, $checkpoint ) {
+        return self::update_columns( $run_id, [
+            'resume_step_index' => (int) $next_index,
+            'checkpoint'        => $checkpoint,
+        ] );
+    }
+
+    /**
+     * Put a failed run back in the queue for a retry that has been
+     * scheduled. The error stays on the row, so Run History shows why the
+     * run is waiting.
+     *
+     * @param int    $run_id
+     * @param string $error_code
+     * @param string $error_message
+     * @param string $failed_step
+     * @return bool
+     */
+    public static function mark_waiting_retry( $run_id, $error_code, $error_message, $failed_step ) {
+        return self::update_status( $run_id, 'queued', [
+            'error_code'    => $error_code,
+            'error_message' => $error_message,
+            'failed_step'   => $failed_step,
+        ] );
+    }
+
+    /**
+     * Update columns without touching status.
+     *
+     * @param int   $run_id
+     * @param array $columns
+     * @return bool
+     */
+    private static function update_columns( $run_id, array $columns ) {
+        global $wpdb;
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- plugin-owned table, single-row update by primary key.
+        return false !== $wpdb->update( self::table(), $columns, [ 'id' => (int) $run_id ] );
     }
 
     /**

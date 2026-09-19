@@ -94,6 +94,7 @@ class FMW_REST_Preflight {
 					'data.* holds RAW STORED VALUES, not the labels a visitor saw. For select / radio / checkbox fields the stored value is the option KEY, so {{ data.workshop }} interpolates as "joinery" rather than "Hand-Cut Joinery Intensive". Correct for machine steps, wrong in anything a person reads — it silently produces "your place is held for the joinery workshop" and the run still reports success. Use the labels namespace for human-facing text.',
                 ],
             ],
+            'error_policy' => 'Per step, on_error: "fail" (default) fails the run at once — it is marked Failed, the failure alert goes out, and it can be replayed. "continue" records the failure, gives the step the output { failed: true, error } and carries on. "retry" retries the run on a RETRYABLE error (timeout, 5xx, rate_limited, upstream_shape — not a 4xx, bad config or php_error) up to settings.max_retries (default 3) after 1, 5, then 15 minutes; the retry RESUMES AT THIS STEP with the context the earlier steps left, so they do not run again. Use "retry" on steps that call an outside service that can be briefly down (http_*, printavo_*, drive_*); leave "fail" on steps whose error will not go away by waiting. While a retry waits, the run shows status queued with error_code and failed_step set. Editing the workflow\'s steps while a retry waits makes it fail with workflow_changed.',
             'diagnostics' => [
                 'stored_plugin_version' => get_option( 'fmw_db_version', '0.0.0' ),
                 'database_health' => [

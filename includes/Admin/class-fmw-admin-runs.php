@@ -12,6 +12,50 @@ if ( ! defined( 'ABSPATH' ) ) {
 class FMW_Admin_Runs {
 
     /**
+     * One-time notice after the 0.4.0 migration repaired runs that the old
+     * retry path left unfinished (FMW_Schema::migrate_to_0_4_0()). Those runs
+     * were marked failed WITHOUT an alert, so an upgrade does not mail every
+     * old failure at once — this notice is how the owner finds them. Shown
+     * on Run History until dismissed.
+     */
+    private function stranded_runs_notice() {
+        $repaired = get_option( 'fmw_repaired_runs' );
+        if ( ! is_array( $repaired ) ) {
+            return;
+        }
+
+        if ( isset( $_GET['fmw_dismiss_repaired'] )
+            && wp_verify_nonce( sanitize_key( wp_unslash( $_GET['_wpnonce'] ?? '' ) ), 'fmw_dismiss_repaired' ) ) {
+            delete_option( 'fmw_repaired_runs' );
+            return;
+        }
+
+        $count = (int) ( $repaired['stranded'] ?? 0 ) + (int) ( $repaired['interrupted'] ?? 0 );
+        if ( $count < 1 ) {
+            delete_option( 'fmw_repaired_runs' );
+            return;
+        }
+
+        $failed_url  = admin_url( 'admin.php?page=fmw-runs&status=failed' );
+        $dismiss_url = wp_nonce_url( admin_url( 'admin.php?page=fmw-runs&fmw_dismiss_repaired=1' ), 'fmw_dismiss_repaired' );
+
+        echo '<div class="notice notice-warning"><p>';
+        printf(
+            /* translators: %d: number of runs */
+            esc_html( _n(
+                'This update found %d run that an earlier version left unfinished — waiting for a retry that never ran, or stopped part-way. It is now marked Failed (retry_stranded or interrupted) and can be replayed.',
+                'This update found %d runs that an earlier version left unfinished — waiting for a retry that never ran, or stopped part-way. They are now marked Failed (retry_stranded or interrupted) and can be replayed.',
+                $count,
+                'flowmint-workflows'
+            ) ),
+            (int) $count
+        );
+        echo ' <a href="' . esc_url( $failed_url ) . '">' . esc_html__( 'Show failed runs', 'flowmint-workflows' ) . '</a>';
+        echo ' · <a href="' . esc_url( $dismiss_url ) . '">' . esc_html__( 'Dismiss', 'flowmint-workflows' ) . '</a>';
+        echo '</p></div>';
+    }
+
+    /**
      * Render the run list view.
      */
     public function render_list() {
@@ -30,6 +74,8 @@ class FMW_Admin_Runs {
 
         echo '<div class="wrap">';
         echo '<h1>' . esc_html__( 'FlowMint Workflows — Run History', 'flowmint-workflows' ) . '</h1>';
+
+        $this->stranded_runs_notice();
 
         // Filter form.
         echo '<form method="get" action="">';
