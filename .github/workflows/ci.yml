@@ -1,0 +1,79 @@
+# CI for FlowMint Workflows.
+#
+# Modelled on post-runtime-engine's and form-runtime-engine's workflows.
+# Two jobs, both required:
+#   lint — php -l every PHP file across the supported version range, plus a
+#          syntax check of the MCP relay (Node, like the relay itself).
+#   test — the PHPUnit Unit suite (Brain Monkey, no WordPress needed).
+#
+# FlowMint is in production for a client; until this file existed the suite
+# only ever ran on a developer's machine and pull requests reported
+# "no checks".
+#
+# Not here: the Integration suite (needs a WordPress test install) and the
+# release build (bin/build-release.sh). Add them when either is wired to run
+# without a live site.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    name: PHP syntax (${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.2']
+    steps:
+      - uses: actions/checkout@v5
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: PHP syntax check (all plugin files)
+        run: |
+          set -e
+          find . -name '*.php' -not -path './vendor/*' -not -path './build/*' -print0 \
+            | xargs -0 -n1 -P4 php -l > /dev/null
+          echo "All PHP files lint clean on PHP ${{ matrix.php }}"
+      - name: MCP connector JS syntax check
+        run: node --check includes/Connectors/MCP/assets/flowmint-connector.js
+
+  test:
+    name: Unit tests (${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      # Run every PHP version even if one fails — a failure on one version and
+      # a failure on another are different bugs; cancelling half the matrix
+      # hides one of them.
+      fail-fast: false
+      matrix:
+        # 8.1, not 7.4, is the floor here. The release ZIP bundles
+        # google/apiclient 2.19 and google/auth 1.50 (both require PHP ^8.1)
+        # and firebase/php-jwt 7 (^8.0). On 7.4 no google/apiclient resolves
+        # at all: every 7.4-compatible release needs a php-jwt version with
+        # security advisories, which Composer refuses (first CI run,
+        # 2026-09-19). A 7.4 leg would therefore test a dependency set that
+        # never ships. The plugin header still says "Requires PHP: 7.4" — that
+        # mismatch is an open decision, not something CI can settle. The lint
+        # job still checks FlowMint's own files parse on 7.4.
+        php: ['8.1', '8.2']
+    steps:
+      - uses: actions/checkout@v5
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer
+      # `composer update`: neither composer.lock nor vendor/ is committed
+      # (both are gitignored), so each PHP version resolves its own
+      # compatible dependency set — the same step the sibling plugins use.
+      - name: Resolve dependencies for this PHP version
+        run: composer update --no-interaction --prefer-dist
+      - name: Run Unit suite
+        run: composer run test:unit
