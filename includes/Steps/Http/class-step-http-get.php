@@ -26,6 +26,10 @@ class FMW_Step_Http_Get extends FMW_Step_Base {
             'properties' => [
                 'url'             => [ 'type' => 'string' ],
                 'headers'         => [ 'type' => 'object' ],
+                'auth'            => [
+                    'type'        => 'object',
+                    'description' => 'A stored credential added at send time: { "credential": "<name>", "scheme": "bearer" | "header" | "basic", "header": "X-API-Key" (scheme header only) }. The secret is stored as credential key http_<name> (PUT /credentials/http_<name>) and never appears in the workflow or its run records. Prefer this to writing a token into headers.',
+                ],
                 'timeout_seconds' => [ 'type' => 'integer', 'default' => 30 ],
                 'accept_non_2xx'  => [ 'type' => 'boolean', 'default' => false ],
             ],

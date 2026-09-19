@@ -281,7 +281,7 @@ const TOOLS = [
   {
     name: "flowmint_list_credentials",
     description:
-      "List the credential keys this site supports (drive_service_account, printavo_api_token, slack_webhook, notification_email) and whether each is configured. NEVER returns plaintext values — only configured-state booleans. Credential VALUES cannot be set through this MCP and there is no admin screen for them: a person sets each one with PUT /wp-json/flowmint/v1/connector/credentials/{key} and body {\"value\": \"...\"} (App Password auth, connector enabled). printavo_api_token's value is a JSON string {\"email\": \"...\", \"token\": \"...\"}.",
+      "List the credential keys this site supports (drive_service_account, printavo_api_token, slack_webhook, notification_email, plus any stored HTTP credentials named http_<name>) and whether each is configured. HTTP steps use an http_<name> credential by name with config.auth: { credential: \"<name>\", scheme: \"bearer\" | \"header\" | \"basic\", header? } — never write a token into headers, where it would be stored in the workflow and every run record. NEVER returns plaintext values — only configured-state booleans. Credential VALUES cannot be set through this MCP and there is no admin screen for them: a person sets each one with PUT /wp-json/flowmint/v1/connector/credentials/{key} and body {\"value\": \"...\"} (App Password auth, connector enabled). printavo_api_token's value is a JSON string {\"email\": \"...\", \"token\": \"...\"}.",
     inputSchema: {
       type: "object",
       properties: {},

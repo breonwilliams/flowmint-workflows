@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **HTTP steps can use a stored credential.** `http_get`, `http_post` and
+  `http_request` take `auth: { credential: "<name>", scheme: "bearer" |
+  "header" | "basic", header? }`. The secret is stored encrypted as
+  `http_<name>` (`PUT /credentials/http_<name>`, listed by `GET
+  /credentials` by name only) and added when the request is sent
+  (`FMW_Http_Client::with_credential()`), so it is never in the workflow
+  config, the recorded step config or the output. Until now a token had to
+  be written into `headers` — `{{ env.* }}` holds only site settings — so it
+  sat in plain text in the workflow and in every run record. A missing
+  credential fails with `credential_not_configured`, an undecryptable one
+  with `credential_unreadable`; an `auth` header replaces one of the same
+  name. `tests/Unit/HttpCredentialTest.php`; verified on Local (10 checks:
+  stored encrypted, listed by name, sent as the header, absent from the
+  workflow, run, step records and snapshot, deleted cleanly). The patterns,
+  step library and connector docs now show `auth` instead of written-in
+  tokens.
+
 ### Changed
 
 - **Requires PHP 8.1** (was 7.4). The release ZIP already bundled
