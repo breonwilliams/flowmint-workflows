@@ -73,7 +73,7 @@ flowmint-workflows/
   CLAUDE.md                           # AI reference
   README.md
   CHANGELOG.md
-  uninstall.php                       # On plugin delete: drop tables, clean transients
+  uninstall.php                       # On plugin delete: housekeeping; data only with FMW_REMOVE_ALL_DATA
   composer.json                       # Defines vendor deps (Action Scheduler, Drive SDK, etc.)
   composer.lock
   phpunit.xml                         # Test config
@@ -625,11 +625,7 @@ Admin UI shows:
 
 ### Uninstallation
 
-`uninstall.php` runs (when plugin is DELETED):
-- Drops all `wp_fmw_*` tables
-- Deletes all `fmw_*` options
-- Deletes all `fmw_*` transients
-- Logs the uninstall action
+`uninstall.php` runs when the plugin is DELETED. By default it KEEPS workflows, run history and stored credentials (the stack's "never delete user data without explicit consent" rule) and removes only housekeeping: `fmw_*` transients, Action Scheduler jobs in the `fmw` group, the connector switch and application-password grants, the capability grants, and one-time flags. With `define( 'FMW_REMOVE_ALL_DATA', true );` in `wp-config.php` (WooCommerce's pattern — FlowMint has no settings screen) it also drops the `wp_fmw_*` tables and deletes every `fmw_*` option, credentials and the credential install nonce included. The nonce is part of the encryption key: it is only ever removed together with the credentials. Up to 0.9.0 the tables and credentials were dropped on every deletion.
 
 ### Upgrades (future)
 
