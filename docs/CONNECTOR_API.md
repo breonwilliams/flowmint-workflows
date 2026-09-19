@@ -57,12 +57,10 @@ code comment.)
   silently takes over from the first, which stops running without any
   error. Put everything a form needs into one workflow, and disable or
   delete the old one when you replace it.
-- **`settings.max_retries`** — how many times a failed run is retried;
-  default 3 (`FMW_Workflow_Job::get_max_retries`). **Automatic retries do
-  not currently work:** a run that fails with a retryable error while
-  retries remain is left in `queued` and never runs again, sends no alert
-  and cannot be replayed. Set `"max_retries": 0` so every failure is final,
-  alerted and replayable — see TROUBLESHOOTING.md, "Run stuck in Queued".
+- **`settings.max_retries`** — how many times a step with
+  `on_error: "retry"` is retried; default 3, 0 turns retries off
+  (`FMW_Workflow_Job::get_max_retries`). It does nothing for steps with
+  `fail` or `continue`.
 - **`steps`** — an ordered list. Each step is `{ name, type, config }` plus
   the optional keys below. `name` is unique within the workflow; later
   steps read this step's output as `{{ steps.<name>.<field> }}`. `type` is
@@ -73,19 +71,29 @@ code comment.)
 | Key | Meaning |
 |---|---|
 | `skip_if` | An expression. When it is truthy the step is skipped and recorded as skipped with the expression as the reason (`FMW_Workflow_Executor`). There is no `when` key — a step with `when` runs every time. |
-| `on_error` | `fail` (default), `continue` or `retry`. `continue` records the failure, gives the step the output `{ failed: true, error: <code> }` and carries on. `fail` and `retry` both end the run as failed; the run is then marked for retry if the error is retryable and retries remain (which currently strands it in `queued` — see `settings.max_retries` above). The two behave the same today. |
+| `on_error` | `fail` (default), `continue` or `retry`. `fail` ends the run as **Failed** at once: the alert goes out and the run can be replayed. `continue` records the failure, gives the step the output `{ failed: true, error: <code> }` and carries on. `retry` retries the run when the error is retryable and `settings.max_retries` allows — after 1, 5 and then 15 minutes — resuming at this step (see below); when retries run out it fails like `fail`. Use `retry` on a step that talks to a service that can be briefly down. |
 
-**A retry — and a replay — runs the whole workflow again from the first step**, with a fresh
-context (`FMW_Workflow_Job::handle`) — it does not resume at the failed
-step. Steps with side effects are written to be safe to repeat:
+**A retry resumes at the step that failed.** After each top-level step the
+run saves a checkpoint (the context: step outputs, variables, the entry),
+and the retry restores it and starts at the failed step, so the steps before
+it — their emails, records and quotes — do not run again
+(`FMW_Workflow_Job::resume_point`). The failed step itself does run again,
+and so does a whole `conditional` or `try_catch` that failed part-way
+through its nested steps. If the workflow's steps are edited while a retry
+waits, the retry fails with `workflow_changed` rather than resume at a step
+that may have moved; replay it. While it waits, the run shows **Queued** with
+the error and failed step recorded.
+
+**A replay runs the whole workflow again from the first step**, with a fresh
+context. Steps with side effects are written to be safe to repeat:
 `send_email` skips a send it already made in the same run to the same
 recipient with the same subject within the hour; `*_find_or_create_*` steps
 find what they created the first time. Errors that cannot succeed on a
 second attempt are not retried: `external_4xx`, `auth_failed`,
 `validation_failed`, `config_error`, `permission_denied`,
 `credential_not_configured`, `dependency_missing`, `file_not_found`,
-`file_not_readable`, `template_not_found`, `invalid_input`
-(`FMW_Step_Exception::is_retryable`).
+`file_not_readable`, `template_not_found`, `invalid_input`, `php_error`
+(a bug in a step), `workflow_changed` (`FMW_Step_Exception::is_retryable`).
 
 ### Interpolation: `{{ … }}`
 
@@ -415,7 +423,7 @@ Manually replay a run. Useful for failed runs after fixing the underlying issue.
 
 **No request body.** The route ignores any body: there is no resume-from-step and no context override. A replay is a new run of the same workflow for the same entry, from the first step, using the workflow's CURRENT saved config (`FMW_REST_Runs::replay`).
 
-- Only runs in `failed`, `cancelled` or `completed` can be replayed; any other status returns `400 cannot_replay`. In practice nothing sets `cancelled` today, and a run stranded in `queued` by the retry defect (see `settings.max_retries`) cannot be replayed.
+- Only runs in `failed`, `cancelled` or `completed` can be replayed; any other status returns `400 cannot_replay` — a run waiting to retry is `queued`. Nothing sets `cancelled` today.
 - A replay runs even when the workflow is disabled.
 
 **Response:**
@@ -608,7 +616,7 @@ There is **no tool to set or delete a credential** or to write a template; those
 4. Claude calls `flowmint_create_workflow` with `enabled: false` (the default), then `flowmint_test_workflow`, then `flowmint_update_workflow` with `enabled: true`
 
 **Debugging a failed run:**
-1. Claude calls `flowmint_list_runs` filtered by status=failed (and status=queued — see the retry defect under `settings.max_retries`)
+1. Claude calls `flowmint_list_runs` filtered by status=failed (a run waiting to retry is status=queued, with `error_code` and `failed_step` already set)
 2. Picks the most recent
 3. Calls `flowmint_get_run` to see step-level detail
 4. Diagnoses (e.g., a step's config_snapshot reveals the issue)

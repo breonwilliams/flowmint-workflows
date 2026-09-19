@@ -369,7 +369,7 @@ Schema rules:
 - `steps[].name` is unique within the workflow and is how downstream steps reference outputs (`{{ steps.<name>.<output_field> }}`).
 - `steps[].type` must be a registered step type (validated at create-time and at run-time).
 - `steps[].config` is the step's configuration. Schema is per-step-type; documented in `STEP_LIBRARY.md`.
-- `steps[].on_error` is `fail` (default — fail the run), `continue` (log error, skip this step's outputs, continue), or `retry` (same as `fail` today).
+- `steps[].on_error` is `fail` (default — fail the run), `continue` (log error, skip this step's outputs, continue), or `retry` (retry the run from this step on a retryable error — see "Retry policy").
 - `steps[].skip_if` is a conditional expression. If it evaluates truthy, the step is skipped (status `skipped`).
 
 ## Trigger types (v0.6.0+)
@@ -495,11 +495,11 @@ All workflow execution is async via Action Scheduler.
 
 ### Retry policy
 
-Designed as: 3 retries with backoff, configurable per workflow via `settings.max_retries`. **As built, automatic retries do not happen:** a retryable failure with retries remaining sets the run back to `queued` and rethrows, but Action Scheduler does not retry a one-off action, so the run stays Queued with no alert and cannot be replayed. Until that is fixed, set `settings.max_retries: 0` — see `TROUBLESHOOTING.md`, "Run stuck in Queued". There is no `retry_delay_seconds` or per-step `max_retries`.
+A run is retried only when the failed step says `on_error: "retry"`, the error is retryable and `settings.max_retries` (default 3) allows. The retry is a separately scheduled `fmw_run_workflow` action after 1, 5, then 15 minutes (`FMW_Workflow_Job::RETRY_DELAYS`; filter `fmw_retry_delay_seconds`). There is no `retry_delay_seconds` setting or per-step `max_retries`.
 
-Retries happen at the WORKFLOW level, not the step level. If step 5 of 10 fails, the WHOLE WORKFLOW retries from step 1. This is intentional — many workflows have order dependencies that make resuming from the failed step incorrect.
+A retry RESUMES AT THE FAILED STEP (since 0.10.0). After each top-level step the job checkpoints the context (step outputs, variables, entry) on the run row; the retry restores it and starts at the failed step, so earlier steps — their emails, records, quotes — do not repeat. The failed step itself runs again, as does a whole `conditional` / `try_catch` that failed part-way through its nested steps, so side-effecting steps must still be IDEMPOTENT (see "Idempotency" below). The checkpoint carries a hash of the step list: if the workflow is edited while a retry waits, the retry fails with `workflow_changed` instead of resuming at a shifted index. A REPLAY is different: a new run from step 1 with a fresh context.
 
-For workflows where this is wrong (e.g., creating a Printavo Quote should not happen twice), individual steps must be IDEMPOTENT (see "Idempotency" below).
+Before 0.10.0 every retryable error was "retried" by rethrowing into Action Scheduler, which never retries a one-off action, so the run stranded in `queued` with no alert; the 0.4.0 DB migration marks such runs `retry_stranded`.
 
 ### Idempotency
 
@@ -538,7 +538,7 @@ Steps that don't create external state (`set_variable`, `log`, `conditional`, et
 Each step can override the default error handling via `on_error`:
 - `fail` (default) — error fails the workflow run
 - `continue` — error is logged, the step's output is empty, the workflow continues to the next step
-- `retry` — behaves exactly like `fail` today (the run-level retry applies to both, and currently strands the run in Queued — see Retry policy)
+- `retry` — on a retryable error, retry the run from this step (after 1, 5, then 15 minutes, up to `settings.max_retries`); when retries run out, fail like `fail` — see Retry policy
 
 `continue` is useful for non-critical steps (e.g., "send Slack notification" in a workflow that's primarily about creating a Quote — failure to send Slack shouldn't fail the whole workflow).
 

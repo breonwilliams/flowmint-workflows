@@ -135,9 +135,6 @@ The original use case that motivated this feature — purge FE entries older tha
     "hour": 2,
     "minute": 0
   },
-  "settings": {
-    "max_retries": 0
-  },
   "steps": [
     {
       "name": "log_start",
@@ -180,7 +177,7 @@ Walk-through:
 3. **`purge`** — Bulk-deletes the found entries. `on_error: continue` means a single failed delete doesn't fail the whole run; failures end up in `failed[]` and the log step still runs.
 4. **`log_done`** — Reports the counts. The numbers flow in via `{{ steps.purge.deleted_count }}` etc.
 
-`max_retries: 0` makes every failure final, so it is alerted and can be replayed — automatic retries currently strand a run in Queued instead (`TROUBLESHOOTING.md`, "Run stuck in Queued").
+No step says `on_error: "retry"`, so any failure is final: the run is marked Failed, alerted and replayable, and tomorrow's run tries again anyway.
 
 Scoping options if you don't want a blanket policy:
 

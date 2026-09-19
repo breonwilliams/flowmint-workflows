@@ -298,12 +298,9 @@ The `fmw_run_workflow` action is registered in `FMW_Workflow_Job::register_handl
 
 ### Retry policy
 
-When a step fails inside the workflow, the executor decides whether to retry based on:
-- The step's `on_error` config (`fail`, `continue`, `retry`)
-- The workflow's `max_retries` setting
-- The current `retry_count` on the run
+When a step fails, `FMW_Workflow_Job::handle_failure` retries the run only if the failed step's `on_error` is `retry`, the error is retryable (`FMW_Step_Exception::is_retryable`) and `retry_count` is below `settings.max_retries` (default 3) — `FMW_Workflow_Job::should_retry`. The retry is a new `fmw_run_workflow` action scheduled with `as_schedule_single_action()` after `RETRY_DELAYS` (60 / 300 / 900 s); the run waits in `queued` with its error recorded. It resumes at the failed step: the executor calls an `on_step_done` callback after each top-level step and the job saves the context as a checkpoint (`checkpoint`, `resume_step_index` on the run row), which `resume_point()` restores. A changed step list (hash in the checkpoint) fails the retry with `workflow_changed`.
 
-If retrying, `FMW_Workflow_Job::handle_failure` sets the run back to `queued` and rethrows — but Action Scheduler does not retry a one-off async action, so the run is stranded in Queued with no alert and cannot be replayed. Until that is fixed, workflows should set `settings.max_retries: 0` (`TROUBLESHOOTING.md`, "Run stuck in Queued").
+**Never rethrow a failure into Action Scheduler to get a retry** — AS never retries a one-off action. Until 0.10.0 that is exactly what happened, and every "retried" run was stranded in `queued` with no alert.
 
 ### Avoiding the worker timeout
 

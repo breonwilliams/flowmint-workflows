@@ -15,6 +15,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 class FMW_Workflow_Job {
 
     /**
+     * Seconds before retry 1, 2, 3… The last value repeats for later
+     * attempts. Filterable per run with `fmw_retry_delay_seconds`.
+     */
+    const RETRY_DELAYS = [ 60, 300, 900 ];
+
+    /**
      * Register the Action Scheduler hook.
      *
      * Called once at plugin init.
@@ -56,6 +62,7 @@ class FMW_Workflow_Job {
         do_action( 'fmw_workflow_run_started', $run_id, $run['workflow_id'], (int) $run['entry_id'] );
 
         $started_at = microtime( true );
+        $executor   = null;
 
         try {
             $context = self::build_context( $run );
@@ -74,8 +81,26 @@ class FMW_Workflow_Job {
                 return;
             }
 
+            // A retry resumes at the step that failed, with the context the
+            // completed steps left, instead of re-running them (their emails,
+            // records and quotes already happened).
+            $workflow_hash = self::steps_hash( $workflow );
+            $start_index   = self::resume_point( $run, $context, $workflow_hash );
+
             $executor = new FMW_Workflow_Executor();
-            $executor->execute( $workflow, $context );
+            $executor->execute( $workflow, $context, [
+                'start_index'  => $start_index,
+                'on_step_done' => static function ( $next_index ) use ( $run_id, $context, $workflow_hash ) {
+                    FMW_Run_Repository::save_checkpoint(
+                        $run_id,
+                        $next_index,
+                        wp_json_encode( [
+                            'context'       => $context->snapshot(),
+                            'workflow_hash' => $workflow_hash,
+                        ] )
+                    );
+                },
+            ] );
 
             // Success.
             $duration_ms = (int) ( ( microtime( true ) - $started_at ) * 1000 );
@@ -93,10 +118,13 @@ class FMW_Workflow_Job {
                 'duration_ms' => $duration_ms,
             ] );
         } catch ( FMW_Step_Exception $e ) {
-            self::handle_failure( $run_id, $run, $e, $started_at );
-        } catch ( Exception $e ) {
-            $wrapped = new FMW_Step_Exception( 'unexpected', $e->getMessage() );
-            self::handle_failure( $run_id, $run, $wrapped, $started_at );
+            self::handle_failure( $run_id, $run, $e, $started_at, $executor ? $executor->failed_step() : null );
+        } catch ( Throwable $e ) {
+            // Throwable, not Exception: a PHP Error outside a step (context
+            // building, a filter) used to escape here and leave the run
+            // `running` for good.
+            $wrapped = new FMW_Step_Exception( $e instanceof Error ? 'php_error' : 'unexpected', $e->getMessage() );
+            self::handle_failure( $run_id, $run, $wrapped, $started_at, null );
         }
     }
 
@@ -166,61 +194,160 @@ class FMW_Workflow_Job {
     }
 
     /**
-     * Handle a failed run.
+     * Handle a failed run: schedule a retry, or fail it for good.
      *
-     * Decides whether to mark final failure or let Action Scheduler retry.
-     * Action Scheduler's retry mechanism: throwing an exception from this
-     * handler causes AS to reschedule with backoff (up to its configured limit).
+     * A run is retried only when the step that failed says `on_error:
+     * "retry"`, the error is retryable (a timeout, a 5xx — not a bad config
+     * or a 4xx) and retries remain (`settings.max_retries`, default 3). That
+     * is the contract ARCHITECTURE.md has always stated: `fail`, the
+     * default, fails the run. Before 0.10.0 every retryable error was
+     * "retried" by rethrowing into Action Scheduler, which never retries a
+     * one-off action, so the run sat in `queued` forever with no alert.
      *
-     * For non-retryable errors, we mark final failure and DON'T throw —
-     * AS treats the action as "completed" and moves on.
+     * The retry is its own scheduled action, and it resumes at the failed
+     * step (see resume_point()). If it cannot be scheduled, the run fails
+     * for good so the alert still goes out.
      *
-     * @param int               $run_id
-     * @param array             $run
+     * @param int                $run_id
+     * @param array              $run
      * @param FMW_Step_Exception $e
-     * @param float             $started_at
-     * @throws FMW_Step_Exception For retryable errors (re-thrown so AS retries)
+     * @param float              $started_at
+     * @param array|null         $failed_step FMW_Workflow_Executor::failed_step().
      */
-    private static function handle_failure( $run_id, array $run, FMW_Step_Exception $e, $started_at ) {
+    private static function handle_failure( $run_id, array $run, FMW_Step_Exception $e, $started_at, $failed_step ) {
         $duration_ms = (int) ( ( microtime( true ) - $started_at ) * 1000 );
         $retry_count = (int) $run['retry_count'];
         $max_retries = self::get_max_retries( $run['workflow_id'] );
+        $on_error    = is_array( $failed_step ) ? $failed_step['on_error'] : 'fail';
+        $step_name   = is_array( $failed_step ) ? $failed_step['name'] : null;
+        $message     = $e->getMessage();
 
-        $should_retry = $e->is_retryable() && $retry_count < $max_retries;
+        if ( self::should_retry( $on_error, $e->is_retryable(), $retry_count, $max_retries ) ) {
+            $attempt = $retry_count + 1;
+            $delay   = self::retry_delay( $attempt, $run_id );
+            $action  = function_exists( 'as_schedule_single_action' )
+                ? as_schedule_single_action( time() + $delay, 'fmw_run_workflow', [ $run_id ], 'fmw' )
+                : 0;
 
-        if ( $should_retry ) {
-            FMW_Run_Repository::increment_retry_count( $run_id );
-            FMW_Logger::warning( 'Workflow run failed — will retry', [
-                'run_id'      => $run_id,
-                'error_code'  => $e->get_error_code(),
-                'retry_count' => $retry_count + 1,
-                'max_retries' => $max_retries,
-            ] );
+            if ( $action ) {
+                FMW_Run_Repository::increment_retry_count( $run_id );
+                FMW_Run_Repository::mark_waiting_retry( $run_id, $e->get_error_code(), $message, $step_name );
 
-            // Reset status to queued so AS re-runs it.
-            FMW_Run_Repository::update_status( $run_id, 'queued' );
+                do_action( 'fmw_workflow_run_retry_scheduled', $run_id, $run['workflow_id'], $attempt, $delay, $e->get_error_code() );
 
-            // Re-throw so Action Scheduler retries with backoff.
-            throw $e;
+                FMW_Logger::warning( 'Workflow run failed — retry scheduled', [
+                    'run_id'      => $run_id,
+                    'error_code'  => $e->get_error_code(),
+                    'step'        => $step_name,
+                    'attempt'     => $attempt,
+                    'max_retries' => $max_retries,
+                    'delay'       => $delay,
+                ] );
+                return;
+            }
+
+            $message .= ' (A retry was due but could not be scheduled.)';
         }
 
-        // Final failure.
+        // Final failure. The checkpoint stays on the row: it shows how far
+        // the run got.
         FMW_Run_Repository::mark_failed(
             $run_id,
             $e->get_error_code(),
-            $e->getMessage(),
-            null, // failed_step is recorded at the step level, not here
-            null  // context_snapshot — we don't have it accessible here
+            $message,
+            $step_name,
+            null
         );
 
-        do_action( 'fmw_workflow_run_failed', $run_id, $run['workflow_id'], (int) $run['entry_id'], $e->get_error_code(), $e->getMessage() );
+        do_action( 'fmw_workflow_run_failed', $run_id, $run['workflow_id'], (int) $run['entry_id'], $e->get_error_code(), $message );
 
         FMW_Logger::error( 'Workflow run failed permanently', [
             'run_id'      => $run_id,
             'error_code'  => $e->get_error_code(),
-            'message'     => $e->getMessage(),
+            'message'     => $message,
+            'step'        => $step_name,
             'retry_count' => $retry_count,
+            'duration_ms' => $duration_ms,
         ] );
+    }
+
+    /**
+     * Whether a failure is retried. Pure, so the rule is unit-tested.
+     *
+     * @param string $on_error    The failed step's on_error policy.
+     * @param bool   $retryable   FMW_Step_Exception::is_retryable().
+     * @param int    $retry_count Retries already used.
+     * @param int    $max_retries settings.max_retries.
+     * @return bool
+     */
+    public static function should_retry( $on_error, $retryable, $retry_count, $max_retries ) {
+        return 'retry' === $on_error && $retryable && (int) $retry_count < (int) $max_retries;
+    }
+
+    /**
+     * Seconds to wait before a given retry attempt (1-based).
+     *
+     * @param int $attempt
+     * @param int $run_id
+     * @return int
+     */
+    public static function retry_delay( $attempt, $run_id = 0 ) {
+        $delays = self::RETRY_DELAYS;
+        $delay  = $delays[ min( max( 1, (int) $attempt ), count( $delays ) ) - 1 ];
+
+        /**
+         * Filter the wait before a retry.
+         *
+         * @param int $delay   Seconds.
+         * @param int $attempt Retry number, 1-based.
+         * @param int $run_id  Run ID.
+         */
+        return max( 1, (int) apply_filters( 'fmw_retry_delay_seconds', $delay, (int) $attempt, (int) $run_id ) );
+    }
+
+    /**
+     * Where this attempt starts, restoring the checkpointed context when it
+     * resumes. A first attempt, or a retry of a run whose first step failed
+     * (nothing to skip), starts at 0.
+     *
+     * @param array                $run
+     * @param FMW_Workflow_Context $context
+     * @param string               $workflow_hash
+     * @return int
+     * @throws FMW_Step_Exception When the workflow's steps changed since the checkpoint.
+     */
+    private static function resume_point( array $run, FMW_Workflow_Context $context, $workflow_hash ) {
+        if ( (int) $run['retry_count'] < 1 || empty( $run['checkpoint'] ) || null === $run['resume_step_index'] ) {
+            return 0;
+        }
+
+        $checkpoint = json_decode( (string) $run['checkpoint'], true );
+        if ( ! is_array( $checkpoint ) || ! isset( $checkpoint['context'] ) ) {
+            return 0;
+        }
+
+        // Step indexes only mean the same thing in the same workflow. If it
+        // was edited while the retry waited, resuming could skip or repeat
+        // the wrong steps — fail instead; the owner can replay the run.
+        if ( ( $checkpoint['workflow_hash'] ?? '' ) !== $workflow_hash ) {
+            throw new FMW_Step_Exception(
+                'workflow_changed',
+                'The workflow\'s steps were edited while this run waited to retry, so it cannot resume where it stopped. Replay the run to run the current version from the start.'
+            );
+        }
+
+        $context->restore( $checkpoint['context'] );
+        return (int) $run['resume_step_index'];
+    }
+
+    /**
+     * Identity of a workflow's step list, for checkpoints.
+     *
+     * @param FMW_Workflow $workflow
+     * @return string
+     */
+    private static function steps_hash( FMW_Workflow $workflow ) {
+        return md5( (string) wp_json_encode( $workflow->steps() ) );
     }
 
     /**

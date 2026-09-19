@@ -124,7 +124,7 @@ If the Quote was created and Printavo's confirmation reached us, the run is mark
 
 Printavo's API has rate limits (specific limits TBD — check Printavo docs for current values).
 
-The `FMW_Printavo_Client` class does not throttle or wait: on a 429 response it throws `FMW_Step_Exception` with `code = rate_limited` at once, and the step fails. `rate_limited` is a retryable code, but automatic retries currently strand the run in Queued (see `TROUBLESHOOTING.md`, "Run stuck in Queued") — with `settings.max_retries: 0` the run fails, alerts, and can be replayed.
+The `FMW_Printavo_Client` class does not throttle or wait: on a 429 response it throws `FMW_Step_Exception` with `code = rate_limited` at once, and the step fails. `rate_limited` is a retryable code: give the Printavo step `"on_error": "retry"` and the run is retried from that step after 1, 5 and 15 minutes. With the default `fail`, the run fails at once, alerts, and can be replayed.
 
 For typical FlowMint client volumes (10-100 submissions/day), rate limits are unlikely to matter. They become relevant if a client has bursts of >50 submissions/minute, in which case the affected runs fail with `rate_limited` and must be replayed.
 
