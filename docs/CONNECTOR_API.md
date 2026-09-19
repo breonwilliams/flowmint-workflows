@@ -17,6 +17,123 @@ This namespace is independent of FormEngine's `/wp-json/fre/v1/connector/...`. T
 
 `v1` namespace is stable for the v1.x lifetime. Breaking changes require a `v2` namespace; both can coexist.
 
+## The workflow language
+
+What a workflow's `config` JSON may contain and how FlowMint evaluates it.
+Every statement here is taken from the code it names; when the two
+disagree, the code wins and this section is wrong. (The preflight has
+always pointed assistants here for this material; until 2026-09-19 the
+section did not exist, and the expression syntax was documented only in a
+code comment.)
+
+### Shape
+
+```json
+{
+  "trigger": { "type": "form", "form_id": "contact" },
+  "settings": { "max_retries": 3 },
+  "steps": [
+    { "name": "log_it", "type": "log_info", "config": { "message": "Entry {{ entry.id }}" } },
+    { "name": "notify", "type": "send_email", "on_error": "continue",
+      "skip_if": "{{ is_empty(data.email) }}",
+      "config": { "to": "{{ data.email }}", "subject": "Thanks", "body": "…" } }
+  ]
+}
+```
+
+- **`trigger`** (required). `{ "type": "form", "form_id": "…" }` runs the
+  workflow when that Promptless Forms form is submitted (the
+  `pforms_submission_complete` action); a top-level `form_id` without a
+  trigger block is normalised to this. `{ "type": "schedule", "interval":
+  "hourly" | "twicedaily" | "daily" | "weekly" }` runs on a schedule, with
+  optional `hour` (0–23), `minute` (0–59) and `day_of_week`, site-local
+  (`FMW_Workflow_Validator`, `FMW_Schedule_Listener`). There is no "run now"
+  for a scheduled workflow; replay a finished run instead.
+- **`settings.max_retries`** — how many times a failed run is retried;
+  default 3 (`FMW_Workflow_Job::get_max_retries`).
+- **`steps`** — an ordered list. Each step is `{ name, type, config }` plus
+  the optional keys below. `name` is unique within the workflow; later
+  steps read this step's output as `{{ steps.<name>.<field> }}`. `type` is
+  one of the registered step types (`flowmint_list_step_types`).
+
+### Per-step keys
+
+| Key | Meaning |
+|---|---|
+| `skip_if` | An expression. When it is truthy the step is skipped and recorded as skipped with the expression as the reason (`FMW_Workflow_Executor`). There is no `when` key — a step with `when` runs every time. |
+| `on_error` | `fail` (default), `continue` or `retry`. `continue` records the failure, gives the step the output `{ failed: true, error: <code> }` and carries on. `fail` and `retry` both end the run as failed; the run is then retried if the error is retryable and retries remain. The two behave the same today. |
+
+**A retry runs the whole workflow again from the first step**, with a fresh
+context (`FMW_Workflow_Job::handle`) — it does not resume at the failed
+step. Steps with side effects are written to be safe to repeat:
+`send_email` skips a send it already made in the same run to the same
+recipient with the same subject within the hour; `*_find_or_create_*` steps
+find what they created the first time. Errors that cannot succeed on a
+second attempt are not retried: `external_4xx`, `auth_failed`,
+`validation_failed`, `config_error`, `permission_denied`,
+`credential_not_configured`, `dependency_missing`, `file_not_found`,
+`file_not_readable`, `template_not_found`, `invalid_input`
+(`FMW_Step_Exception::is_retryable`).
+
+### Interpolation: `{{ … }}`
+
+Any string in a step's `config` may contain `{{ … }}`
+(`FMW_Interpolator`). Inside the braces:
+
+- **A context path** — `data.email`, `labels.service`, `entry.id`,
+  `steps.find.contact_id`, `vars.team`, `run.id`, `workflow.id`, `form.id`,
+  `entry_files.<field_key>`, and inside `pre_upsert_records`'s `map`,
+  `item.<field>`. The preflight's `context_shape` describes each namespace.
+  **A path that does not exist resolves to an empty string**, and the step
+  still succeeds — check paths against the run history.
+- **A fallback** — `{{ data.company || data.full_name }}` gives the first
+  truthy operand.
+- **A literal** — `'text'` or `"text"`, a number, `true`, `false`, `null`.
+- **A function call** — `now('Y-m')` (site-local time in a PHP date
+  format), `template('name')` (renders `wp-content/uploads/fmw-templates/`),
+  `has_file(entry, 'field_key')`, `is_empty(x)`, `length(x)` (items or
+  characters), `contains(haystack, needle)`, `equals_ci(a, b)`. An unknown
+  function logs a warning and resolves to an empty string.
+
+There are **no filters** (`{{ data.email | upper }}` resolves to an empty
+string).
+
+When a string is exactly one `{{ … }}` the value keeps its type (an array
+stays an array — that is how `records: "{{ steps.fetch.body.items }}"`
+passes a list); when the braces sit inside other text, the value is turned
+into text.
+
+**Human-facing text should use `labels.*`, machine destinations `data.*`.**
+For a select, radio or checkbox, `data.*` is the stored option value
+(`joinery`) and `labels.*` the label the visitor saw
+(`Hand-Cut Joinery Intensive`).
+
+### Expressions: `skip_if` and `conditional`
+
+`skip_if` and the `conditional` step's `if` are boolean expressions
+(`FMW_Expression` — a small parser, not `eval`):
+
+- operands: `{{ … }}` paths and function calls as above, and literals;
+- comparison: `==`, `!=`, `>`, `<`, `>=`, `<=`;
+- logic: `&&`, `||`, `!`, and parentheses.
+
+```json
+{ "if": "{{ data.service == 'pothole' || data.service == 'streetlight' }}" }
+{ "skip_if": "{{ !has_file(entry, 'photo') }}" }
+```
+
+A bare function call inside a comparison (`length(x) > 5`) is not yet
+supported by the parser.
+
+### Nested steps
+
+`conditional` (`then`, `else`) and `try_catch` (`try`, `catch`) hold nested
+step lists. Each nested step is interpolated when it runs, so it can use
+the output of the steps before it in the same list. `try_catch` catches
+the error codes in `catch_codes`, or every error when that list is empty.
+In the run history, a nested step is recorded as its own step, and the
+parent records its expression and lists as written.
+
 ## Endpoints
 
 ### Preflight

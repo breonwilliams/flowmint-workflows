@@ -104,7 +104,7 @@ class FMW_Workflow_Executor {
                 $idx,
                 $step_name,
                 $step_type,
-                wp_json_encode( $interpolated_config )
+                wp_json_encode( self::config_snapshot( $class, $raw_config, $interpolated_config ) )
             );
 
             $started_at = microtime( true );
@@ -184,5 +184,27 @@ class FMW_Workflow_Executor {
             do_action( 'fmw_step_completed',
                 $context->get_run_id(), $step_name, $step_type, $output );
         }
+    }
+
+    /**
+     * What the run history records as a step's config: the interpolated
+     * values — so a person sees the actual recipient, subject and URL a run
+     * used — except for the keys the step evaluates itself, which are kept
+     * as written (an expression, nested step lists, a per-record template).
+     *
+     * @param string $class               Step class.
+     * @param array  $raw_config          Config as written in the workflow.
+     * @param array  $interpolated_config Config after interpolation.
+     * @return array
+     */
+    public static function config_snapshot( $class, array $raw_config, array $interpolated_config ): array {
+        $snapshot = $interpolated_config;
+        $keys     = is_callable( [ $class, 'raw_config_keys' ] ) ? $class::raw_config_keys() : [];
+        foreach ( $keys as $key ) {
+            if ( array_key_exists( $key, $raw_config ) ) {
+                $snapshot[ $key ] = $raw_config[ $key ];
+            }
+        }
+        return $snapshot;
     }
 }

@@ -138,6 +138,20 @@ abstract class FMW_Step_Base {
     abstract public function execute( FMW_Workflow_Context $context ): array;
 
     /**
+     * Config keys this step evaluates ITSELF — an expression, nested step
+     * lists, a per-record template — rather than using the pre-interpolated
+     * value. The run history records these as written, because the
+     * interpolated copy of an expression or of {{ item.* }} is empty or
+     * meaningless (the 2026-09-19 pressure test found a conditional's "if"
+     * recorded as "" — nobody debugging the run could see what was tested).
+     *
+     * @return string[]
+     */
+    public static function raw_config_keys(): array {
+        return [];
+    }
+
+    /**
      * Get the step's name within the workflow.
      *
      * @return string

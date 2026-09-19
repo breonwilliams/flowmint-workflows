@@ -6,6 +6,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+Found by the 2026-09-19 pressure test (a township site built through the
+four connectors on Local).
+
+- **Steps inside a `try_catch` could not use values produced earlier in
+  the same `try`.** The step ran its nested lists from the config that had
+  been interpolated before any nested step ran, so
+  `"{{ vars.a }}"` after a `set_variable` of `a`, or
+  `"{{ steps.find.contact_id }}"` after a lookup, became an empty string —
+  measured: `var={{ vars.a }}` after `a=hello` logged `var=`. The
+  `conditional` step had exactly this bug until 0.6.4; `try_catch` now reads
+  its `try` and `catch` lists raw the same way, and each nested step is
+  interpolated when it runs. **Behaviour change for existing workflows:** a
+  `try_catch` whose inner steps reference earlier inner steps now receives
+  the real values where it received empty strings.
+- **The run history hid what a conditional tested and what an import
+  mapped.** Every step's recorded config was the interpolated one, so a
+  `conditional`'s `if` was stored as `""` and a `pre_upsert_records`
+  `map` as blanks. Steps now declare the keys they evaluate themselves
+  (`FMW_Step_Base::raw_config_keys()`: `if`/`then`/`else`, `try`/`catch`,
+  `map`), and those are recorded as written; everything else is still
+  recorded resolved, so the actual recipient and subject stay visible.
+  `tests/Unit/RawConfigTest.php`.
+- **The document the preflight points assistants at did not cover what the
+  preflight said it did.** `schema_document_url` is `docs/CONNECTOR_API.md`,
+  described as covering expression syntax, interpolation and `on_error`;
+  it was an endpoint reference, and the expression syntax lived only in a
+  code comment. It now has **The workflow language**: triggers, per-step
+  `skip_if` and `on_error`, what a retry does (the whole run again from the
+  first step), interpolation paths and functions, expressions, and nested
+  steps — each taken from the code it names.
+  `tests/Unit/WorkflowLanguageDocTest.php` fails if a function is added or
+  removed without the section following, or an `on_error` value goes
+  undocumented.
+- **The relay advertised a `when` step key that does not exist** — a step
+  given `when` ran every time. It now says `skip_if`, which the executor
+  reads. `flowmint_test_workflow` no longer claims to validate an unsaved
+  config (it needs a saved `workflow_id`; create disabled, test, enable),
+  and the interpolator's header no longer lists `| filter` syntax it never
+  had.
+
 ## [0.9.0] - 2026-09-14
 
 ### Added
