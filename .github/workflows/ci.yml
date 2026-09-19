@@ -48,12 +48,21 @@ jobs:
     name: Unit tests (${{ matrix.php }})
     runs-on: ubuntu-latest
     strategy:
-      # Run every PHP version even if one fails — a 7.4-only failure and an
-      # 8.2-only failure are different bugs; cancelling half the matrix hides
-      # one of them.
+      # Run every PHP version even if one fails — a failure on one version and
+      # a failure on another are different bugs; cancelling half the matrix
+      # hides one of them.
       fail-fast: false
       matrix:
-        php: ['7.4', '8.2']
+        # 8.1, not 7.4, is the floor here. The release ZIP bundles
+        # google/apiclient 2.19 and google/auth 1.50 (both require PHP ^8.1)
+        # and firebase/php-jwt 7 (^8.0). On 7.4 no google/apiclient resolves
+        # at all: every 7.4-compatible release needs a php-jwt version with
+        # security advisories, which Composer refuses (first CI run,
+        # 2026-09-19). A 7.4 leg would therefore test a dependency set that
+        # never ships. The plugin header still says "Requires PHP: 7.4" — that
+        # mismatch is an open decision, not something CI can settle. The lint
+        # job still checks FlowMint's own files parse on 7.4.
+        php: ['8.1', '8.2']
     steps:
       - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
