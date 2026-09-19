@@ -219,30 +219,76 @@ class ExpressionTest extends UnitTestCase {
     }
 
     public function test_length_used_in_comparison() {
-        // Known limitation surfaced during Wave 1 testing: bare
-        // function calls inside compound expressions don't work as
-        // documented. The architecture doc shows
-        //   "{{ length(data.notes) > 100 && !is_empty(data.full_name) }}"
-        // as a supported pattern, but in practice the outer {{ }} gets
-        // stripped before parsing, leaving `length(data.msg) > 5`. The
-        // parser tokenizes `length` as an identifier (not a function
-        // call) and falls back to context-path resolution (returning
-        // empty string), so the comparison silently evaluates wrong.
-        //
-        // This is a real production-affecting bug — workflows in the
-        // wild may have written compound expressions like this and be
-        // silently getting incorrect skip_if decisions.
-        //
-        // Fixing it requires either (a) extending the parser to
-        // recognize function-call syntax, OR (b) adding a pre-pass
-        // that wraps bare function calls in placeholders before
-        // tokenization. Either is significant work that belongs in a
-        // dedicated session, not as a side effect of test scaffolding.
-        //
-        // Recorded in FLOWMINT_AUDIT.md as a Wave-2 finding.
-        $this->markTestSkipped(
-            'Compound expressions with bare function calls (e.g. "length(x) > 5") are not supported by the current parser. See FLOWMINT_AUDIT.md Wave-2 finding for the fix plan.'
-        );
+        // Was skipped until 0.10.0 as a known limitation (FLOWMINT_AUDIT.md
+        // Wave-2): the call was tokenized as a path and never ran.
+        $this->context->set_data( [ 'msg' => 'hello world', 'full_name' => 'Pat' ] );
+        $this->assertTrue( $this->expression->evaluate( '{{ length(data.msg) > 5 }}' ) );
+        $this->assertFalse( $this->expression->evaluate( '{{ length(data.msg) > 50 }}' ) );
+        $this->assertTrue( $this->expression->evaluate( '{{ length(data.msg) > 5 && !is_empty(data.full_name) }}' ), 'the ARCHITECTURE.md example' );
+    }
+
+    public function test_a_negated_call_is_called() {
+        // Before 0.10.0 this was ALWAYS true — ! of an unrun call.
+        $this->context->set_data( [ 'note' => '' ] );
+        $this->assertFalse( $this->expression->evaluate( '{{ !is_empty(data.note) }}' ) );
+        $this->assertTrue( $this->expression->evaluate( '{{ is_empty(data.note) && true }}' ) );
+    }
+
+    public function test_calls_with_nested_calls_and_quoted_parentheses() {
+        $this->context->set_data( [ 'msg' => 'Size (XL) please', 'code' => 'ABC' ] );
+        $this->assertTrue( $this->expression->evaluate( '{{ contains(data.msg, "(XL)") && length(data.code) == 3 }}' ) );
+        $this->assertTrue( $this->expression->evaluate( '{{ !contains(data.msg, "(S)") }}' ) );
+    }
+
+    public function test_several_blocks_each_evaluated() {
+        $this->context->set_data( [ 'rush' => 'no', 'qty' => 5, 'note' => '' ] );
+        $this->assertTrue( $this->expression->evaluate( "{{ data.rush == 'no' }} && {{ data.qty > 3 }}" ) );
+        $this->assertTrue( $this->expression->evaluate( "({{ data.rush == 'yes' }}) || {{ is_empty(data.note) }}" ), 'a comparing block inside a larger expression is a condition, not an empty value' );
+        $this->assertFalse( $this->expression->evaluate( "{{ is_empty(data.note) }} && {{ data.qty > 9 }}" ) );
+    }
+
+    public function test_an_or_block_is_still_a_value() {
+        // The interpolator reads a || b as "first non-empty value"; that
+        // worked before and must keep working.
+        $this->context->set_data( [ 'nickname' => '', 'name' => 'Pat' ] );
+        $this->assertTrue( $this->expression->evaluate( "{{ data.nickname || data.name }} == 'Pat'" ) );
+    }
+
+    public function test_legacy_result_differs_flags_exactly_the_changed_shapes() {
+        foreach ( [
+            '{{ length(data.msg) > 5 }}',
+            '{{ !has_file(entry, "photo") }}',
+            "({{ data.a == 'x' }}) && {{ data.b }}",
+            "{{ data.a || data.b }} && {{ data.c == 'x' }}",
+            'has_file(entry, "photo") && {{ data.b }}',
+        ] as $changed ) {
+            $this->assertTrue( \FMW_Expression::legacy_result_differs( $changed ), $changed );
+        }
+        foreach ( [
+            '{{ has_file(entry, "photo") }}',
+            '!{{ has_file(entry, "photo") }}',
+            "{{ data.a == 'x' && data.b }}",
+            "{{ data.a == 'x' }} && {{ data.b == 'y' }}",
+            '({{ data.a }}) && ({{ data.b }})',
+            "{{ data.a || 'x' }} == 'x'",
+            '',
+        ] as $same ) {
+            $this->assertFalse( \FMW_Expression::legacy_result_differs( $same ), $same );
+        }
+    }
+
+    public function test_changed_conditions_walks_nested_steps() {
+        $config = [ 'steps' => [
+            [ 'name' => 'a', 'type' => 'log_info', 'skip_if' => '{{ !is_empty(data.x) }}' ],
+            [ 'name' => 'b', 'type' => 'log_info', 'skip_if' => '{{ is_empty(data.x) }}' ],
+            [ 'name' => 'branch', 'type' => 'conditional', 'config' => [
+                'if'   => '{{ length(data.x) > 3 }}',
+                'then' => [ [ 'name' => 'inner', 'type' => 'log_info', 'skip_if' => '{{ !has_file(entry, "p") }}' ] ],
+            ] ],
+        ] ];
+        $found = \FMW_Expression::changed_conditions( $config );
+        $this->assertSame( [ 'a', 'branch', 'branch → then → inner' ], array_column( $found, 'step' ) );
+        $this->assertSame( [ 'skip_if', 'if', 'skip_if' ], array_column( $found, 'field' ) );
     }
 
     // -----------------------------------------------------------------

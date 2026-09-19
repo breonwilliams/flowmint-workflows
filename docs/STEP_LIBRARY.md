@@ -146,7 +146,7 @@ function_call := identifier '(' arg ( ',' arg )* ')'
 arg := path | literal
 ```
 
-**A function call must be the whole content of its `{{ }}`**, with operators outside: `!{{ has_file(entry, 'photo') }}`, `{{ length(data.notes) }} > 100`. Written as `{{ !has_file(entry, 'photo') }}` or `{{ length(data.notes) > 100 }}`, the call is never made (the name is read as a missing path), so the first is always true. When an expression has several `{{ }}` blocks, wrap each in parentheses — `({{ has_file(entry, 'a') }}) && ({{ has_file(entry, 'b') }})` — because an expression that starts with `{{` and ends with `}}` is otherwise read as one block. A single `{{ }}` holding only paths and literals may contain operators: `{{ data.service == 'pothole' || data.service == 'streetlight' }}`. See `CONNECTOR_API.md`, "Expressions".
+Calls, paths, literals and operators combine freely, in one `{{ }}` or several: `{{ !has_file(entry, 'photo') }}`, `{{ length(data.notes) > 100 }}`, `{{ has_file(entry, 'a') }} && {{ has_file(entry, 'b') }}`. Before 0.10.0 a call beside an operator inside one `{{ }}` was never made, so `{{ !has_file(entry, 'photo') }}` was always true; the Workflows screen lists saved conditions whose result changed. See `CONNECTOR_API.md`, "Expressions".
 
 Available functions:
 - `has_file(entry, '<field_key>')` — entry has a file attached for the given field

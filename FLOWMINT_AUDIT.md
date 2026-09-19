@@ -188,6 +188,8 @@ This isn't a "the code is wrong" finding — the code may be correct. It's a "th
 
 ### I-NEW. Compound expressions with bare function calls don't work as documented (surfaced during Wave 1 testing)
 
+> **RESOLVED 2026-09-19 (0.10.0).** The tokenizer resolves `name(…)` as a call, a condition block inside a larger expression is evaluated as a condition, and the outer `{{ }}` is stripped only for a single block. `FMW_Expression::legacy_result_differs()` recognises the shapes whose result changed, and the Workflows screen lists saved conditions in them. `ExpressionTest::test_length_used_in_comparison` is no longer skipped.
+
 **Where:** `includes/Core/class-fmw-expression.php` parse_and_evaluate(), and `includes/Core/class-fmw-interpolator.php` resolve_expression().
 
 **The problem:** the architecture doc and step library examples show compound expressions like:

@@ -230,7 +230,7 @@ Then use `skip_if` on every subsequent step:
 }
 ```
 
-The `!` goes outside the braces: written as `{{ !has_file(...) }}`, the function is never called and the condition is always true (see CONNECTOR_API.md, "Expressions").
+Before 0.10.0 the `!` had to go outside the braces — `{{ !has_file(...) }}` never called the function and was always true. Both forms work now (see CONNECTOR_API.md, "Expressions").
 
 (Or — better — restructure the workflow so the file-dependent steps are inside a `conditional`'s `then` block.)
 
