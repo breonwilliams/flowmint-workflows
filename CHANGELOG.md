@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **Deleting the plugin keeps workflows, runs and credentials unless you opt
+  in.** Up to 0.9.0 `uninstall.php` dropped the three tables and deleted the
+  stored credentials on every deletion, and left the connector switch
+  behind. It now follows the stack's rule ("never delete user data without
+  explicit consent"): housekeeping always goes — transients, Action
+  Scheduler jobs in the `fmw` group, the connector switch and
+  application-password grants (`FMW_Connector_Settings::delete_all()`,
+  which existed but was never called), capability grants, one-time flags.
+  Data goes only with `define( 'FMW_REMOVE_ALL_DATA', true );` in
+  `wp-config.php` — WooCommerce's pattern, since FlowMint has no settings
+  screen. The credential install nonce is part of the encryption key, so it
+  is kept whenever the credentials are. `tests/Unit/UninstallTest.php` runs
+  the real `uninstall.php` both ways.
 - **Requires PHP 8.1** (was 7.4). The release ZIP already bundled
   `google/apiclient` 2.19.2 and `google/auth` 1.50.1, which require PHP
   ^8.1, and `firebase/php-jwt` 7.0.5 (^8.0); with `platform-check` off,
