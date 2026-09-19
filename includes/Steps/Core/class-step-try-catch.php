@@ -59,9 +59,26 @@ class FMW_Step_Try_Catch extends FMW_Step_Base {
         return true;
     }
 
+    /**
+     * Evaluated by the step itself; recorded as written in the run history.
+     *
+     * @return string[]
+     */
+    public static function raw_config_keys(): array {
+        return [ 'try', 'catch' ];
+    }
+
     public function execute( FMW_Workflow_Context $context ): array {
-        $try_steps   = $this->config['try']   ?? [];
-        $catch_steps = $this->config['catch'] ?? [];
+        // The nested step lists come from raw_config, exactly as the
+        // conditional's branches do (v0.6.4). $this->config was interpolated
+        // before ANY nested step ran, so a step inside the try that referred
+        // to a value produced earlier in the same try — {{ vars.x }} after a
+        // set_variable, {{ steps.find.contact_id }} after a lookup — got an
+        // empty string. Measured 2026-09-19: "var={{ vars.a }}" after
+        // set_variable a=hello logged "var=". Each nested step is interpolated
+        // by the sub-executor when it runs, against the context as it is then.
+        $try_steps   = $this->raw_config['try']   ?? $this->config['try']   ?? [];
+        $catch_steps = $this->raw_config['catch'] ?? $this->config['catch'] ?? [];
         $catch_codes = $this->config['catch_codes'] ?? [];
 
         $sub_workflow_for_steps = function( $steps, $tag ) use ( $context ) {

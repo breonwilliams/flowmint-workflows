@@ -8,7 +8,6 @@
  *   {{ data.email }}                       — context path
  *   {{ steps.customer.id }}                — nested context path
  *   {{ data.company || data.full_name }}   — fallback (first truthy)
- *   {{ data.email | upper }}               — filters (Phase 5+)
  *   {{ now('Y-m') }}                       — function call
  *   {{ template('name') }}                 — template render
  *

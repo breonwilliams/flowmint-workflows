@@ -97,7 +97,7 @@ const TOOLS = [
     name: "flowmint_create_workflow",
     description:
       "Create a new workflow. BEFORE your first create in a session, call flowmint_preflight and WebFetch the returned schema_document_url so you understand the workflow JSON shape and step-type contracts. " +
-      "The 'config' argument MUST be a JSON STRING (not an object) conforming to the FlowMint workflow schema. JSON.stringify your config object before passing it in. The config defines a steps array — each step has { name, type, config, on_error?, when? } where `name` is a unique-within-workflow identifier (snake_case recommended) and `type` is one of the registered step types. Use flowmint_list_step_types to see what types are available and their config shapes. " +
+      "The 'config' argument MUST be a JSON STRING (not an object) conforming to the FlowMint workflow schema. JSON.stringify your config object before passing it in. The config defines a steps array — each step has { name, type, config, on_error?, skip_if? } (skip_if is an expression; there is no 'when' key) where `name` is a unique-within-workflow identifier (snake_case recommended) and `type` is one of the registered step types. Use flowmint_list_step_types to see what types are available and their config shapes. " +
       "FlowMint workflows trigger off the pforms_submission_complete action — bind a workflow to a Promptless Forms form via the form_id field (or omit form_id and pass an explicit `trigger` block in config for schedule-triggered workflows). The workflow runs asynchronously through Action Scheduler, never blocking the form submission. " +
       "Workflows created via this tool are automatically tagged managed_by='connector:cowork' (unless overridden) and start at connector_version=1. Conflicts on an existing ID return already_exists (409) — use flowmint_update_workflow instead.",
     inputSchema: {
@@ -120,7 +120,7 @@ const TOOLS = [
         config: {
           type: "string",
           description:
-            "JSON string describing the workflow steps and metadata. Required keys: steps (array). Each step: { name, type, config, on_error?, when? } where `name` is a unique-within-workflow identifier (snake_case recommended). Tip: JSON.stringify your config object before passing it in.",
+            "JSON string describing the workflow steps and metadata. Required keys: steps (array). Each step: { name, type, config, on_error?, skip_if? } (skip_if is an expression; there is no 'when' key) where `name` is a unique-within-workflow identifier (snake_case recommended). Tip: JSON.stringify your config object before passing it in.",
         },
         enabled: {
           type: "boolean",
@@ -183,7 +183,7 @@ const TOOLS = [
   {
     name: "flowmint_test_workflow",
     description:
-      "Validate a workflow config without executing it. Returns { valid, errors, warnings }. Pass an explicit config (JSON STRING) to test changes before saving, OR omit config to validate the currently-stored workflow.",
+      "Validate a workflow config without executing it. Returns { valid, errors, warnings }. workflow_id is REQUIRED and must name a saved workflow: pass config (a JSON STRING) to validate changes to it before saving them, or omit config to validate what is stored. To validate a brand-new workflow, create it with enabled:false, test it, then enable it with flowmint_update_workflow.",
     inputSchema: {
       type: "object",
       properties: {

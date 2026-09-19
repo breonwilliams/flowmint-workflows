@@ -104,6 +104,15 @@ class FMW_Step_Pre_Upsert_Records extends FMW_Step_Base {
         ];
     }
 
+    /**
+     * Evaluated by the step itself; recorded as written in the run history.
+     *
+     * @return string[]
+     */
+    public static function raw_config_keys(): array {
+        return [ 'map' ];
+    }
+
     public function execute( FMW_Workflow_Context $context ): array {
         if ( ! function_exists( 'pcptpages' ) || ! pcptpages() || empty( pcptpages()->post_data ) || ! method_exists( pcptpages()->post_data, 'upsert_external' ) ) {
             throw new FMW_Step_Exception(

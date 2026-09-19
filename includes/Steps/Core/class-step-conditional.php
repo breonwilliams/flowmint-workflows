@@ -55,6 +55,15 @@ class FMW_Step_Conditional extends FMW_Step_Base {
         return true; // Depends on inner steps; safest to assume yes.
     }
 
+    /**
+     * Evaluated by the step itself; recorded as written in the run history.
+     *
+     * @return string[]
+     */
+    public static function raw_config_keys(): array {
+        return [ 'if', 'then', 'else' ];
+    }
+
     public function execute( FMW_Workflow_Context $context ): array {
         // Use raw_config['if'] — the pre-interpolation expression text — so
         // comparison operators (==, !=, <=, etc.) survive into the
