@@ -35,6 +35,35 @@ class FMW_REST_Credentials {
         'notification_email',
     ];
 
+    /**
+     * Option listing the names of stored HTTP credentials (never values), so
+     * GET /credentials can show them. The secrets themselves live in
+     * FMW_Credential_Store under `http_<name>`.
+     */
+    const HTTP_INDEX_OPTION = 'fmw_http_credentials';
+
+    /**
+     * Whether a key is one this API accepts: a fixed key, or `http_<name>`
+     * for an HTTP step's `auth.credential` (see FMW_Http_Client::with_credential()).
+     *
+     * @param string $key
+     * @return bool
+     */
+    private static function is_known_key( $key ) {
+        if ( in_array( $key, self::$known_keys, true ) ) {
+            return true;
+        }
+        return 0 === strpos( $key, 'http_' ) && (bool) preg_match( FMW_Http_Client::CREDENTIAL_NAME_PATTERN, substr( $key, 5 ) );
+    }
+
+    /**
+     * @return string[] Stored HTTP credential keys (http_<name>).
+     */
+    private static function http_keys() {
+        $names = get_option( self::HTTP_INDEX_OPTION, [] );
+        return is_array( $names ) ? array_values( array_unique( array_map( 'strval', $names ) ) ) : [];
+    }
+
     public function register() {
         $base = '/' . FMW_REST_Api::base() . '/credentials';
 
@@ -71,7 +100,7 @@ class FMW_REST_Credentials {
 
     public function list( $request ) {
         $items = [];
-        foreach ( self::$known_keys as $key ) {
+        foreach ( array_merge( self::$known_keys, self::http_keys() ) as $key ) {
             $items[] = [
                 'key'        => $key,
                 'configured' => FMW_Credential_Store::is_configured( $key ),
@@ -83,7 +112,7 @@ class FMW_REST_Credentials {
 
     public function get_status( $request ) {
         $key = (string) $request['key'];
-        if ( ! in_array( $key, self::$known_keys, true ) ) {
+        if ( ! self::is_known_key( $key ) ) {
             return FMW_REST_Auth::error( 'unknown_credential_key', "Credential key '{$key}' is not recognized.", 404 );
         }
         return rest_ensure_response( FMW_REST_Auth::success( [
@@ -95,7 +124,7 @@ class FMW_REST_Credentials {
 
     public function set( $request ) {
         $key = (string) $request['key'];
-        if ( ! in_array( $key, self::$known_keys, true ) ) {
+        if ( ! self::is_known_key( $key ) ) {
             return FMW_REST_Auth::error( 'unknown_credential_key', "Credential key '{$key}' is not recognized.", 404 );
         }
 
@@ -114,6 +143,10 @@ class FMW_REST_Credentials {
             return FMW_REST_Auth::error( 'storage_failed', 'Failed to encrypt or store credential.', 500 );
         }
 
+        if ( 0 === strpos( $key, 'http_' ) ) {
+            update_option( self::HTTP_INDEX_OPTION, array_values( array_unique( array_merge( self::http_keys(), [ $key ] ) ) ), false );
+        }
+
         FMW_Logger::info( 'Credential stored', [ 'key' => $key ] );
 
         return rest_ensure_response( FMW_REST_Auth::success( [
@@ -124,11 +157,15 @@ class FMW_REST_Credentials {
 
     public function delete( $request ) {
         $key = (string) $request['key'];
-        if ( ! in_array( $key, self::$known_keys, true ) ) {
+        if ( ! self::is_known_key( $key ) ) {
             return FMW_REST_Auth::error( 'unknown_credential_key', "Credential key '{$key}' is not recognized.", 404 );
         }
 
         $ok = FMW_Credential_Store::delete( $key );
+
+        if ( 0 === strpos( $key, 'http_' ) ) {
+            update_option( self::HTTP_INDEX_OPTION, array_values( array_diff( self::http_keys(), [ $key ] ) ), false );
+        }
 
         return rest_ensure_response( FMW_REST_Auth::success( [
             'key'        => $key,
@@ -139,7 +176,7 @@ class FMW_REST_Credentials {
 
     public function test( $request ) {
         $key = (string) $request['key'];
-        if ( ! in_array( $key, self::$known_keys, true ) ) {
+        if ( ! self::is_known_key( $key ) ) {
             return FMW_REST_Auth::error( 'unknown_credential_key', "Credential key '{$key}' is not recognized.", 404 );
         }
 

@@ -153,10 +153,8 @@ A homeowner fills out a "request a quote" form. The workflow:
       "type": "http_post",
       "config": {
         "url": "https://api.crm.example.com/v1/leads",
-        "headers": {
-          "Authorization": "Bearer <CRM_API_TOKEN>",
-          "Content-Type": "application/json"
-        },
+        "headers": { "Content-Type": "application/json" },
+        "auth": { "credential": "crm", "scheme": "bearer" },
         "body": {
           "first_name": "{{ data.first_name }}",
           "last_name": "{{ data.last_name }}",
@@ -226,7 +224,7 @@ A homeowner fills out a "request a quote" form. The workflow:
 Notes:
 - `crm_sync.on_error` defaults to `fail` — if the CRM is down, the run fails at once and alerts. To ride out a short outage instead, set `"on_error": "retry"` on it: the run is retried from `crm_sync` after 1, 5 and 15 minutes (up to `settings.max_retries`), without re-running the steps before it.
 - `upload_photos.on_error` is `continue` — if photo upload fails, we still want the rest of the lead processing to complete. The lead is logged for manual upload later.
-- The CRM token and the team Slack webhook URL are written into the steps' config. `{{ env.* }}` holds only `site_name`, `site_url` and `admin_email`, so a credential cannot be read from it (a missing path resolves to an empty string), and HTTP steps have no credential option. The token is therefore stored in the workflow config and recorded in each run's step config — use one scoped to the minimum access the step needs. (The `slack_webhook` credential is used only for FlowMint's own failure alerts.)
+- The CRM token is the stored credential `http_crm` (`PUT /credentials/http_crm`), named in `auth` — it is added when the request is sent and is never in the workflow or its run history. The team Slack webhook URL is written into its step's config; treat it as a secret too, or store it as an HTTP credential and send it with `scheme: "header"` where the service allows. (The `slack_webhook` credential is used only for FlowMint's own failure alerts.)
 
 ## Pattern 3: Appointment booking (consultation, service appointment)
 
@@ -249,7 +247,7 @@ A customer fills out a booking form. The workflow:
       "type": "http_get",
       "config": {
         "url": "https://api.scheduler.example.com/v1/availability",
-        "headers": { "Authorization": "Bearer <SCHEDULER_API_TOKEN>" }
+        "auth": { "credential": "scheduler", "scheme": "bearer" }
       }
     },
     {
@@ -478,7 +476,8 @@ Each upload step has a `skip_if` that checks for file existence before attemptin
       "type": "http_get",
       "config": {
         "url": "https://api.vendor.example/v1/programs?status=active",
-        "headers": { "Accept": "application/json", "Authorization": "Bearer <VENDOR_API_TOKEN>" },
+        "headers": { "Accept": "application/json" },
+        "auth": { "credential": "vendor", "scheme": "bearer" },
         "timeout_seconds": 60
       }
     },
@@ -526,17 +525,19 @@ Each upload step has a `skip_if` that checks for file existence before attemptin
 
 ## Anti-patterns to avoid
 
-### ⚠️ API tokens for HTTP steps live in the workflow JSON — keep them narrow
-
-There is currently no way to keep an HTTP step's token out of the workflow:
+### ❌ Don't write API tokens into an HTTP step's headers
 
 ```json
-{ "headers": { "Authorization": "Bearer <API_TOKEN>" } }
+{ "headers": { "Authorization": "Bearer abc123…" } }
 ```
 
-Do **not** write `{{ env.crm_api_token }}`: `env` holds only `site_name`, `site_url` and `admin_email`, so that resolves to an empty string and the request goes out as `Bearer ` with no token. The encrypted credential store serves only the built-in Drive and Printavo steps and the failure alerts; HTTP steps have no credential option.
+A token written there is stored in the workflow config (plaintext in the database, returned by `GET /workflows/{id}`) and recorded in every run's step config. Store it once as an HTTP credential and name it:
 
-So the token is stored in the workflow config (plaintext in the database, returned by `GET /workflows/{id}`) and recorded in each run's step config. Use a token scoped to the minimum access the step needs, give it its own name at the vendor so it can be revoked alone, and rotate it by updating the workflow.
+```json
+{ "auth": { "credential": "crm", "scheme": "bearer" } }
+```
+
+`PUT /credentials/http_crm` with `{"value": "<token>"}` stores it encrypted; the step adds it at send time and it appears nowhere else (CONNECTOR_API.md, Credentials). Rotate it with another `PUT` — no workflow edit. Do **not** write `{{ env.crm_api_token }}` either: `env` holds only `site_name`, `site_url` and `admin_email`, so that resolves to an empty string. Before 0.10.0 HTTP steps had no `auth` option and a written-in token was the only way; move those to credentials. Still use a token scoped to the minimum access the step needs.
 
 ### ❌ Don't assume external APIs always succeed
 

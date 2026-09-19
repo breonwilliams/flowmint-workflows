@@ -28,6 +28,9 @@ class FMW_Http_Client {
      *     @type bool         $accept_non_2xx Default false (throws on 4xx/5xx)
      *     @type bool         $follow_redirects Default true
      *     @type bool         $verify_ssl Default true
+     *     @type array        $auth       Optional { credential, scheme, header } —
+     *                                    a stored credential added at send time;
+     *                                    see with_credential().
      * }
      * @return array { status, headers, body, duration_ms }
      * @throws FMW_Step_Exception
@@ -42,6 +45,10 @@ class FMW_Http_Client {
         $body_format = (string) ( $args['body_format'] ?? 'json' );
         $headers     = (array) ( $args['headers'] ?? [] );
         $timeout     = (int) ( $args['timeout_seconds'] ?? 30 );
+
+        if ( ! empty( $args['auth'] ) ) {
+            $headers = self::with_credential( $headers, $args['auth'] );
+        }
 
         $accept_non_2xx   = ! empty( $args['accept_non_2xx'] );
         $follow_redirects = ! isset( $args['follow_redirects'] ) || $args['follow_redirects'];
@@ -141,6 +148,85 @@ class FMW_Http_Client {
         if ( $status >= 400 && $status < 500 ) return 'external_4xx';
         if ( $status >= 500 ) return 'external_5xx';
         return 'unexpected';
+    }
+
+    /**
+     * Credential names a step's `auth.credential` may use: stored as
+     * `http_<name>` in FMW_Credential_Store.
+     */
+    const CREDENTIAL_NAME_PATTERN = '/^[a-z0-9_]{1,48}$/';
+
+    /**
+     * Add a stored credential to a request's headers.
+     *
+     * The step names the credential; the secret is read here, at send time,
+     * so it is never in the workflow config, the step's recorded config or
+     * its output (response headers are recorded, request headers are not).
+     * Before 0.10.0 there was no way to do this: `{{ env.* }}` holds only
+     * site settings, so a token had to be written into the step's headers.
+     *
+     *   auth: { credential: "vendor", scheme: "bearer" }            → Authorization: Bearer <secret>
+     *   auth: { credential: "vendor", scheme: "header", header: "X-API-Key" } → X-API-Key: <secret>
+     *   auth: { credential: "vendor", scheme: "basic" }             → Authorization: Basic base64(<secret>)  (secret is "user:password")
+     *
+     * The header it sets replaces one of the same name in `headers`.
+     *
+     * @param array $headers
+     * @param mixed $auth
+     * @return array
+     * @throws FMW_Step_Exception config_error for a malformed auth block,
+     *                            credential_not_configured when nothing is stored.
+     */
+    public static function with_credential( array $headers, $auth ) {
+        if ( ! is_array( $auth ) ) {
+            throw new FMW_Step_Exception( 'config_error', 'HTTP request: auth must be an object { credential, scheme }.' );
+        }
+        $name   = (string) ( $auth['credential'] ?? '' );
+        $scheme = (string) ( $auth['scheme'] ?? 'bearer' );
+        if ( ! preg_match( self::CREDENTIAL_NAME_PATTERN, $name ) ) {
+            throw new FMW_Step_Exception( 'config_error', 'HTTP request: auth.credential must be a credential name (lowercase letters, digits, underscores).' );
+        }
+
+        switch ( $scheme ) {
+            case 'bearer':
+                $header = 'Authorization';
+                break;
+            case 'basic':
+                $header = 'Authorization';
+                break;
+            case 'header':
+                $header = (string) ( $auth['header'] ?? '' );
+                if ( ! preg_match( '/^[A-Za-z0-9-]{1,64}$/', $header ) ) {
+                    throw new FMW_Step_Exception( 'config_error', 'HTTP request: auth.scheme "header" needs auth.header, a header name such as X-API-Key.' );
+                }
+                break;
+            default:
+                throw new FMW_Step_Exception( 'config_error', "HTTP request: auth.scheme must be bearer, header or basic (got '{$scheme}')." );
+        }
+
+        $secret = FMW_Credential_Store::get( 'http_' . $name );
+        if ( is_wp_error( $secret ) ) {
+            throw new FMW_Step_Exception( 'credential_unreadable', "HTTP request: the credential '{$name}' is stored but cannot be decrypted — usually the site's security keys changed. Store it again." );
+        }
+        if ( null === $secret || '' === $secret ) {
+            throw new FMW_Step_Exception( 'credential_not_configured', "HTTP request: no credential named '{$name}' is stored (credential key http_{$name})." );
+        }
+
+        if ( 'bearer' === $scheme ) {
+            $value = 'Bearer ' . $secret;
+        } elseif ( 'basic' === $scheme ) {
+            $value = 'Basic ' . base64_encode( $secret ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- HTTP Basic auth encoding.
+        } else {
+            $value = $secret;
+        }
+
+        foreach ( array_keys( $headers ) as $existing ) {
+            if ( 0 === strcasecmp( (string) $existing, $header ) ) {
+                unset( $headers[ $existing ] );
+            }
+        }
+        $headers[ $header ] = $value;
+        return $headers;
     }
 
     /**

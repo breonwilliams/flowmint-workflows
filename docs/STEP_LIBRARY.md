@@ -767,23 +767,19 @@ Convenience wrappers for the most common cases.
 ```json
 {
   "url": "https://api.example.com/v1/widgets/{{ data.widget_id }}",
-  "headers": {
-    "Authorization": "Bearer <API_TOKEN>"
-  },
+  "auth": { "credential": "example_api", "scheme": "bearer" },
   "timeout_seconds": 30
 }
 ```
 
-**API tokens go in `headers` as written text.** HTTP steps have no credential option, and `{{ env.* }}` holds only `site_name`, `site_url` and `admin_email` — `{{ env.example_api_token }}` resolves to an empty string. The token is therefore stored in the workflow config and recorded in each run's step config; use a token scoped to the minimum access the step needs.
+**API tokens go in a stored credential, named in `auth`** (all three HTTP steps, since 0.10.0). Store the token with `PUT /credentials/http_example_api`; `scheme` is `bearer` (default), `header` with `"header": "X-API-Key"`, or `basic` (the secret is `user:password`). The token is added when the request is sent, so it is never in the workflow config, the recorded step config or the output; a missing credential fails the step with `credential_not_configured`. Don't write a token into `headers` (it is then stored and recorded in plain text), and don't use `{{ env.* }}` — it holds only `site_name`, `site_url` and `admin_email`.
 
 **Config (http_post):**
 ```json
 {
   "url": "https://api.example.com/v1/widgets",
-  "headers": {
-    "Authorization": "Bearer <API_TOKEN>",
-    "Content-Type": "application/json"
-  },
+  "headers": { "Content-Type": "application/json" },
+  "auth": { "credential": "example_api", "scheme": "bearer" },
   "body": {
     "name": "{{ data.widget_name }}",
     "color": "{{ data.color }}"

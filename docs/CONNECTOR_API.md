@@ -105,8 +105,9 @@ Any string in a step's `config` may contain `{{ … }}`
   `entry_files.<field_key>`, and inside `pre_upsert_records`'s `map`,
   `item.<field>`. `env` holds exactly three values — `env.site_name`,
   `env.site_url`, `env.admin_email` (`FMW_Workflow_Context`) — and nothing
-  else: stored credentials cannot be read through `{{ env.* }}`. The
-  preflight's `context_shape` describes each namespace.
+  else: stored credentials cannot be read through `{{ env.* }}` — an HTTP
+  step uses a stored secret through its `auth` option instead (see
+  Credentials). The preflight's `context_shape` describes each namespace.
   **A path that does not exist resolves to an empty string**, and the step
   still succeeds — check paths against the run history.
 - **A fallback** — `{{ data.company || data.full_name }}` gives the first
@@ -519,7 +520,7 @@ If `config` is provided, validates it (the `{id}` is then not looked up). If omi
 
 #### `GET /credentials`
 
-List the four supported credential keys (NEVER returns values). `GET /credentials/{key}` returns one of them.
+List the four built-in credential keys and every stored HTTP credential (`http_<name>`) — NEVER values. `GET /credentials/{key}` returns one of them.
 
 **Response:**
 ```json
@@ -529,7 +530,8 @@ List the four supported credential keys (NEVER returns values). `GET /credential
     { "key": "drive_service_account", "configured": true, "testable": true },
     { "key": "printavo_api_token", "configured": true, "testable": true },
     { "key": "slack_webhook", "configured": false, "testable": false },
-    { "key": "notification_email", "configured": false, "testable": false }
+    { "key": "notification_email", "configured": false, "testable": false },
+    { "key": "http_crm", "configured": true, "testable": false }
   ]
 }
 ```
@@ -552,6 +554,14 @@ Set a credential. Encrypted at rest.
 - `printavo_api_token`: a JSON string `{"email": "<Printavo login email>", "token": "<API token>"}` — a bare token is rejected when a step runs (`FMW_Printavo_Client::from_credentials`).
 - `slack_webhook`: the incoming-webhook URL (must start with `https://`).
 - `notification_email`: the address failure alerts are emailed to (the site admin email when unset).
+- `http_<name>` (since 0.10.0; `<name>` is lowercase letters, digits and underscores, up to 48): a secret for HTTP steps — an API token, an API key, or `user:password` for Basic auth. A step uses it by name, never by value:
+
+  ```json
+  { "type": "http_post", "config": { "url": "https://api.crm.example/v1/leads",
+    "auth": { "credential": "crm", "scheme": "bearer" } } }
+  ```
+
+  `scheme` is `bearer` (default; `Authorization: Bearer <secret>`), `header` (with `"header": "X-API-Key"`; the header carries the secret) or `basic` (`Authorization: Basic base64(<secret>)`). It replaces a header of the same name in `headers`. The secret is added when the request is sent (`FMW_Http_Client::with_credential`), so it is never in the workflow config, the step's recorded config or its output. A missing one fails the step with `credential_not_configured`; one that no longer decrypts, with `credential_unreadable`. Not testable through `/test`.
 
 Failure alerts go to Slack **or** email, never both: when `slack_webhook` is set, the alert is posted there without waiting for a reply, and if that post fails the alert is lost — no email is sent (`FMW_Failure_Notifier`).
 
