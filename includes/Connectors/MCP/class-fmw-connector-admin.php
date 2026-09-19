@@ -1,8 +1,8 @@
 <?php
 /**
- * Claude Connection admin page.
+ * Connector admin page.
  *
- * Lives under FlowMint Workflows → Claude Connection. Exposes:
+ * Lives under FlowMint Workflows → Connector. Exposes:
  *   - Connector enable toggle (kill switch, default off).
  *   - Generate / Revoke Connection (App Password).
  *   - One-line Terminal install command for the MCP server.

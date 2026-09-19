@@ -12,7 +12,7 @@ Async workflow runtime that turns Form Runtime Engine submissions into multi-ste
 
 == Description ==
 
-FlowMint Workflows is a WordPress plugin that listens for `fre_submission_complete` (Form Runtime Engine's post-submission action) and runs configurable multi-step workflows asynchronously via Action Scheduler.
+FlowMint Workflows is a WordPress plugin that listens for `pforms_submission_complete` (Promptless Forms' post-submission action; Promptless Forms was formerly Form Runtime Engine) and runs configurable multi-step workflows asynchronously via Action Scheduler.
 
 Use cases include:
 
@@ -24,7 +24,7 @@ Use cases include:
 
 The plugin includes a built-in MCP connector so Claude Desktop / Claude Cowork can create and inspect workflows over the WordPress REST API.
 
-**Companion to Form Runtime Engine** — FlowMint Workflows requires FRE 1.6.0+ to be active.
+**Companion to Form Runtime Engine** — FlowMint Workflows requires Promptless Forms 1.8.0+ to be active.
 
 == Installation ==
 
@@ -33,15 +33,15 @@ The plugin includes a built-in MCP connector so Claude Desktop / Claude Cowork c
 3. Activate the plugin through the **Plugins** screen.
 4. Run `composer install --no-dev` inside the plugin directory if vendor/ is missing (the build script handles this for distributed ZIPs).
 5. Visit **FlowMint Workflows → Run History** to confirm setup.
-6. To enable the Claude Cowork MCP connector, go to **FlowMint Workflows → Claude Connection** and follow the setup steps.
+6. To enable the Claude Cowork MCP connector, go to **FlowMint Workflows → Connector** and follow the setup steps.
 
-For credential storage (Drive service account, Printavo API token, Slack webhook), see the docs/ directory inside the plugin.
+Credentials (Drive service account, Printavo API token, Slack webhook, notification email) have no admin screen: they are set with `PUT /wp-json/flowmint/v1/connector/credentials/{key}`, which needs the connector enabled. See docs/CONNECTOR_API.md inside the plugin.
 
 == Frequently Asked Questions ==
 
 = Does FlowMint Workflows require Form Runtime Engine? =
 
-Yes. FlowMint listens to `fre_submission_complete`, an action that FRE 1.6.0+ fires after a form submission is fully processed. Without FRE active, FlowMint shows an admin notice and does not initialize.
+Yes. FlowMint listens to `pforms_submission_complete`, an action that Promptless Forms 1.8.0+ fires after a form submission is fully processed. Without FRE active, FlowMint shows an admin notice and does not initialize.
 
 = Can workflows run synchronously? =
 

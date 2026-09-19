@@ -117,7 +117,7 @@ class FMW_Step_Pre_Upsert_Records extends FMW_Step_Base {
         if ( ! function_exists( 'pcptpages' ) || ! pcptpages() || empty( pcptpages()->post_data ) || ! method_exists( pcptpages()->post_data, 'upsert_external' ) ) {
             throw new FMW_Step_Exception(
                 'dependency_missing',
-                'pre_upsert_records: Post Runtime Engine 0.8.2+ is not active (pcptpages()->post_data->upsert_external not available).'
+                'pre_upsert_records: Post Runtime Engine 0.9.0+ is not active (pcptpages()->post_data->upsert_external not available).'
             );
         }
 

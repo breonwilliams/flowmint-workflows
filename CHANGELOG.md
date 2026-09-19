@@ -8,6 +8,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+Found writing the user documentation (2026-09-19), each checked in the code:
+
+- **`{{ workflow.title }}` and `{{ form.title }}` were always empty.**
+  `ARCHITECTURE.md` and `SCHEDULED_WORKFLOWS.md` document them, but nothing
+  called the context's metadata setters. `FMW_Workflow_Job::build_context()`
+  now fills both — the form title through `fre()->registry->get()`, which
+  `INTEGRATION_FRE.md` allows. Additive: a workflow that never used them
+  renders as before.
+- **Failure alerts named the workflow by its id.** The notifier read a
+  `name` column the workflows table doesn't have; it reads `title` now. The
+  email SUBJECT still carries the id, so existing mail filters keep matching.
+- **Documentation, tool descriptions and messages checked against the code**
+  (found writing the user documentation). The ones that sent assistants and
+  site owners the wrong way:
+  - expressions — a function call that shares its `{{ }}` with `!`, `&&`,
+    `||` or a comparison is never called; `{{ !has_file(...) }}` is always
+    true. The examples in `CONNECTOR_API.md`, `ARCHITECTURE.md`,
+    `MIGRATION_FROM_ZAPIER.md` and the parser's own docblock showed exactly
+    that form. The docs now state the rule and the working forms (behaviour
+    unchanged — fixing the parser is an open decision);
+  - `{{ env.* }}` holds only `site_name`, `site_url` and `admin_email`;
+    `REFERENCE_PATTERNS.md` read stored credentials through it, which
+    resolves to an empty string;
+  - one workflow per form — a submission runs only the most recently updated
+    enabled workflow for its form, now stated in the docs and the create
+    tool;
+  - `enabled` — the relay advertised `default: true`; a workflow created
+    without it is saved disabled. The schema now says false (the relay only
+    sends the field when given, so no request changes);
+  - `/test` checks less than create/update, and replay takes no body
+    (`from_step`, `with_modified_context` were documented, never read);
+  - credentials — no admin screen or MCP tool sets them (REST `PUT` with the
+    connector on); the Printavo credential is `{"email","token"}` JSON, not a
+    bare token; the Drive test never contacts Google; alerts go to Slack OR
+    email, and a failed Slack post drops the alert;
+  - `log_error` sends no notification; `pre_upsert_records` needs Post
+    Runtime 0.9.0+ (not 0.8.2); readme.txt and messages name
+    `pforms_submission_complete`, Promptless Forms 1.8.0+ and the
+    **Connector** screen;
+  - `TROUBLESHOOTING.md` gains "Run stuck in Queued": a retryable failure
+    with retries left is set to queued and rethrown, but Action Scheduler
+    never retries a one-off action, so the run stays queued with no alert.
+    Workaround until that is decided: `settings.max_retries: 0`.
+
 Found by the 2026-09-19 pressure test (a township site built through the
 four connectors on Local).
 

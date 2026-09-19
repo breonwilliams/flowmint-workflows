@@ -11,7 +11,7 @@ FlowMint Workflows uses the API token to:
 - Create customers
 - Create Quotes / Invoices
 
-The plugin's `FMW_Printavo_Client` class wraps the GraphQL queries with FlowMint conventions: structured error handling, rate limit awareness (429 backoff), idempotency for state-changing operations.
+The plugin's `FMW_Printavo_Client` class wraps the GraphQL queries with FlowMint conventions: structured error handling, a distinct `rate_limited` error on 429, idempotency for state-changing operations.
 
 ## Prerequisites
 
@@ -59,15 +59,9 @@ For 725 Print Lab: Test Customer ID `10706641` ("TEST — Acme Corp"). Created d
 
 ## Step 3: Configure FlowMint Workflows with the credential
 
-### Option A: WordPress admin UI (Phase 5 onward)
+The credential is **two values stored together as one JSON string**: the Printavo login email the token belongs to, and the token. Printavo authenticates with both (FlowMint sends them as the `email` and `token` headers), and a bare token is rejected when a Printavo step runs with `config_error` — "Printavo credential JSON must include "email" and "token" fields" (`FMW_Printavo_Client::from_credentials`).
 
-1. WP Admin → FlowMint Workflows → Settings
-2. Section "Printavo"
-3. Paste the API token into the "API Token" field
-4. Click "Save"
-5. Click "Test Connection" — should report the connected Printavo account info
-
-### Option B: REST API
+There is no admin screen for credentials and no MCP tool that sets one: the REST route below is the only way. It requires the connector to be enabled (**FlowMint Workflows → Connector**) and an Application Password for a user with the `flowmint_manage_workflows` capability.
 
 ```
 PUT /wp-json/flowmint/v1/connector/credentials/printavo_api_token
@@ -75,20 +69,18 @@ Authorization: Basic <base64 of user:apppassword>
 Content-Type: application/json
 
 {
-  "value": "<paste API token here>"
+  "value": "{\"email\": \"<Printavo login email>\", \"token\": \"<API token>\"}"
 }
 ```
+
+Note that `value` is a **string** containing JSON, not a nested object — the route rejects a non-string `value`.
 
 Test:
 ```
 POST /wp-json/flowmint/v1/connector/credentials/printavo_api_token/test
 ```
 
-### Option C: Via Claude / MCP
-
-> "Configure the Printavo API token credential. Here's the token: <paste>"
-
-Claude calls `workflow_credentials_set` then `workflow_credentials_test`.
+This makes a real Printavo call and returns the account's id, company name and email. Through Claude / MCP, `flowmint_test_credential` runs the same test (it cannot set the credential).
 
 ## Step 4: Verify with a trivial workflow
 
@@ -132,13 +124,9 @@ If the Quote was created and Printavo's confirmation reached us, the run is mark
 
 Printavo's API has rate limits (specific limits TBD — check Printavo docs for current values).
 
-The `FMW_Printavo_Client` class:
-- Maintains a per-second request counter
-- If the counter approaches the limit, sleeps before sending
-- On 429 response, waits the `Retry-After` duration (or 30s default) and retries up to 3 times
-- After 3 failed retries due to rate limit, throws `FMW_Step_Exception` with `code = rate_limited` — Action Scheduler retries the whole step with longer backoff
+The `FMW_Printavo_Client` class does not throttle or wait: on a 429 response it throws `FMW_Step_Exception` with `code = rate_limited` at once, and the step fails. `rate_limited` is a retryable code, but automatic retries currently strand the run in Queued (see `TROUBLESHOOTING.md`, "Run stuck in Queued") — with `settings.max_retries: 0` the run fails, alerts, and can be replayed.
 
-For typical FlowMint client volumes (10-100 submissions/day), rate limits are unlikely to matter. They become relevant if a client has bursts of >50 submissions/minute, in which case workflow latency increases gracefully but no submissions are lost.
+For typical FlowMint client volumes (10-100 submissions/day), rate limits are unlikely to matter. They become relevant if a client has bursts of >50 submissions/minute, in which case the affected runs fail with `rate_limited` and must be replayed.
 
 ## Authentication errors
 

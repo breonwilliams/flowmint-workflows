@@ -2,8 +2,9 @@
 /**
  * Step: log_error
  *
- * Logs an error-level message. Also fires fmw_log action so notification
- * subscribers (Slack, email) can pick it up.
+ * Logs an error-level message and fires the fmw_log action. Nothing
+ * subscribes to fmw_log by default, so this sends no notification; the
+ * failure notifier runs only when a run fails for good.
  *
  * @package FlowMintWorkflows
  */
@@ -27,7 +28,7 @@ class FMW_Step_Log_Error extends FMW_Step_Base {
     }
 
     public static function description(): string {
-        return 'Writes an ERROR-level message. Triggers notification channels (Slack, email) configured in settings.';
+        return 'Writes an ERROR-level message to the PHP error log (when WP_DEBUG_LOG is on) and fires the fmw_log action. Sends NO notification — nothing listens to fmw_log by default, and the step itself succeeds. To alert someone, use send_email or let the run fail (failed runs trigger the failure alert).';
     }
 
     public static function config_schema(): array {

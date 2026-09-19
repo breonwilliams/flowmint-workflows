@@ -38,16 +38,7 @@ The plugin posts to this URL on workflow failure. The Slack channel receives a f
 
 ## Step 2: Configure FlowMint Workflows with the webhook URL
 
-### Option A: Admin UI (Phase 5+)
-
-1. WP Admin → FlowMint Workflows → Settings
-2. Section "Notifications"
-3. Paste webhook URL into "Slack Webhook URL"
-4. Optionally set "Notification rules" (e.g., "Notify after 3 consecutive failures" — defaults to "Notify on every permanent failure")
-5. Click "Save"
-6. Click "Send Test Notification" — Slack channel gets a test message
-
-### Option B: REST API
+There is no admin screen for credentials and no MCP tool that sets one: the REST route below is the only way. It requires the connector to be enabled (**FlowMint Workflows → Connector**) and an Application Password for a user with the `flowmint_manage_workflows` capability.
 
 ```
 PUT /wp-json/flowmint/v1/connector/credentials/slack_webhook
@@ -59,99 +50,81 @@ Content-Type: application/json
 }
 ```
 
-Test:
-```
-POST /wp-json/flowmint/v1/connector/credentials/slack_webhook/test
-```
+The URL must start with `https://`; any other value is ignored and alerts go by email instead.
 
-### Option C: Via Claude / MCP
+**The webhook cannot be tested from FlowMint.** `POST /credentials/slack_webhook/test` returns `400 not_testable`, and there is no "send test notification". To check it, post to the URL yourself (`curl -X POST -H 'Content-Type: application/json' -d '{"text":"test"}' <webhook URL>`), or make a disabled copy of a workflow fail on purpose with `settings.max_retries: 0` and replay it.
 
-> "Configure the Slack webhook URL: <paste>"
+## When an alert is sent
 
-## Step 3: Set notification preferences (optional)
+One alert per run that fails **for good** (`fmw_workflow_run_failed`, fired by `FMW_Workflow_Job` after retries). There are no notification rules, thresholds or dedupe settings — every final failure alerts once. The only controls are two filters for code: `fmw_failure_notification_enabled` (return false to suppress, e.g. on staging) and `fmw_failure_notification_message` (rewrite the text).
 
-By default, FlowMint posts to Slack on EVERY permanent workflow failure. To customize, set the option `fmw_notification_rules` (Phase 5 admin UI exposes this; for now, set via WP CLI or directly in DB):
+**Two gaps to know about:**
 
-```php
-update_option('fmw_notification_rules', [
-    'on_first_failure' => true,           // notify immediately on first failure
-    'on_consecutive_failures' => 0,        // OR after N consecutive failures (0 = disabled)
-    'workflow_filter' => null,             // OR specific workflow_id (null = all)
-    'min_severity' => 'failed',            // 'failed' or 'warning' or 'info'
-    'rate_limit_minutes' => 5,             // dedupe identical errors within N minutes
-]);
-```
-
-For typical FlowMint operations: `on_first_failure: true`, `rate_limit_minutes: 5` is sane.
+- **Slack OR email, never both.** When `slack_webhook` is set, the alert goes to Slack only. The post is sent without waiting for Slack's reply, so if Slack rejects it (webhook revoked, channel archived) the alert is lost — no email is sent in its place (`FMW_Failure_Notifier`).
+- **A run that is still marked for retry sends no alert.** Automatic retries currently strand a run in Queued, where it never fails for good and so never alerts. Set `"max_retries": 0` in each workflow's `settings` until that is fixed — see `TROUBLESHOOTING.md`, "Run stuck in Queued".
 
 ## What the Slack message looks like
 
-```
-🔴 Workflow failed: 725-bulk-order-quote
-Run ID: 42
-Form: bulk-order-quote (entry 5)
-Failed step: drive_upload_file
-Error: Drive API timeout after 30s
-Retries exhausted (3/3)
+Plain text, four lines:
 
-🔗 View run details: https://725printlab.com/wp-admin/admin.php?page=fmw-runs&run_id=42
+```
+FlowMint workflow FAILED after all retries: "725 Bulk Order → Printavo + Drive" on 725 Print Lab
+Error: [external_5xx] Drive API timeout after 30s
+Form entry: #5
+Inspect + replay: https://725printlab.com/wp-admin/admin.php?page=fmw-runs&run_id=42
 ```
 
-The deep link goes to the run detail page in the client's WordPress admin, where FlowMint can:
+A scheduled run shows `Trigger: scheduled run (no form entry)` in place of the entry line. The link goes to the run detail page in the client's WordPress admin, where you can:
 - See the exact step config that ran
-- See the partial output from successful steps
-- See the error message and stack trace
-- Manually replay once the issue is fixed
+- See the output from the steps that succeeded
+- See the error code and message
+- Replay once the issue is fixed
 
-## Email notifications as fallback / alternative
+## Email instead of Slack
 
-If Slack isn't configured, the plugin falls back to email. Configure via:
+With no `slack_webhook` set, the alert is emailed (`wp_mail`) to the `notification_email` credential, or to the site's admin email when that is unset or not a valid address:
 
 ```
 PUT /wp-json/flowmint/v1/connector/credentials/notification_email
 { "value": "alerts@flowmint.dev" }
 ```
 
-Same delivery rules, just email instead of Slack.
-
-You can configure BOTH (Slack + email) — useful for redundancy or for stakeholders who prefer one or the other.
+Setting both does **not** send both — Slack wins. To get alerts by email, leave `slack_webhook` unset.
 
 ## Notification channels for v1
 
-| Channel | Setup difficulty | Recommended |
+| Channel | Setup difficulty | Status |
 |---|---|---|
-| Slack incoming webhook | Easy (5 min) | ✓ Primary |
-| Email (wp_mail) | None (uses WP defaults) | Fallback |
-| Discord webhook | Easy (similar to Slack) | Phase 5 |
-| Microsoft Teams webhook | Medium (different format) | Future |
-| PagerDuty | Hard (full integration) | Future |
-| Custom webhook (your own endpoint) | Easy (HTTP POST) | Phase 5 |
+| Slack incoming webhook | Easy (5 min) | Supported |
+| Email (wp_mail) | None (uses WP defaults) | Supported — used only when Slack is not set |
+| Discord, Teams, PagerDuty, custom webhook | — | Not built |
 
-For v1, Slack + email are the focus. Other channels added as need arises.
+## Slack messages WITHIN workflows
 
-## Notifications WITHIN workflows
-
-Some workflows might WANT to send a Slack message as part of their normal flow (e.g., "new high-priority lead, ping the team"). For that, use the `slack_notify` step type (different from notification-on-failure):
+A workflow that should post to Slack as part of its normal flow (e.g., "new high-priority lead, ping the team") uses an `http_post` step to a webhook URL. There is no `slack_notify` step type, and the `slack_webhook` credential cannot be read from a step (`{{ env.* }}` holds only `site_name`, `site_url` and `admin_email`), so the URL is written into the step — use a separate webhook from the alerts one:
 
 ```json
 {
   "name": "high_priority_alert",
-  "type": "slack_notify",
+  "type": "http_post",
+  "skip_if": "{{ data.budget_range != '5000_plus' }}",
   "config": {
-    "channel": "{{ env.slack_team_webhook }}",
-    "message": "🚨 New high-priority lead from {{ data.full_name }}: {{ steps.create_quote.url }}",
-    "skip_if": "{{ data.budget_range != '5000_plus' }}"
+    "url": "<TEAM_SLACK_WEBHOOK_URL>",
+    "body": { "text": "New high-priority lead from {{ labels.full_name }}: {{ steps.create_quote.url }}" }
   }
 }
 ```
 
-(`slack_notify` is in the Phase 5 step library — used by workflows themselves, distinct from the failure-notification system.)
+`skip_if` belongs on the step, not inside `config`.
 
 ## Troubleshooting
 
-### "Test notification" succeeds but real failures don't trigger Slack
+### Real failures don't reach Slack
 
-Check `fmw_notification_rules`. If `on_first_failure: false` and `on_consecutive_failures: 5`, you need 5 failures in a row before notification fires.
+In order:
+- Is the run actually **Failed**? A run sitting in **Queued** has not failed for good and sends nothing — see `TROUBLESHOOTING.md`, "Run stuck in Queued".
+- Is the webhook still valid? Post to it by hand (Step 2). If Slack rejects it, FlowMint drops the alert silently.
+- Does something on the site return false from `fmw_failure_notification_enabled`?
 
 ### Webhook URL was working but stopped
 
@@ -160,11 +133,8 @@ Slack webhook URLs don't expire by default. Possible causes:
 - Channel was deleted/archived
 - Workspace permissions changed
 
-Re-create the webhook (Step 1) and update the credential.
+Re-create the webhook (Step 1) and update the credential. Alerts sent in the meantime were lost.
 
 ### Notifications spam the channel
 
-The default `rate_limit_minutes: 5` should prevent this. If it's still happening:
-- A workflow might be failing in a tight retry loop
-- Check the Action Scheduler queue for many queued actions of the same type
-- Investigate root cause; pause the affected workflow temporarily via `PATCH /workflows/<id>` with `enabled: false`
+Each alert is one run that failed for good, so many alerts mean many failing runs — e.g., a scheduled workflow failing every hour, or many submissions hitting the same broken step. Investigate the root cause; pause the affected workflow temporarily via `PATCH /workflows/<id>` with `enabled: false`.

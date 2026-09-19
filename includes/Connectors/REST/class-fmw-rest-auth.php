@@ -24,7 +24,7 @@ class FMW_REST_Auth {
      *
      * Two-gate check (matches the FRE / Promptless connector pattern):
      *   1. The connector kill switch must be on. Default off — site
-     *      administrator opts in via FlowMint Workflows → Claude Connection.
+     *      administrator opts in via FlowMint Workflows → Connector.
      *   2. The authenticated user must hold the scoped
      *      FMW_Capabilities::MANAGE_WORKFLOWS capability (granted to
      *      administrator by default; site operators can delegate to
@@ -72,7 +72,7 @@ class FMW_REST_Auth {
         if ( ! self::is_preflight_request( $request ) && ! self::connector_enabled() ) {
             return new WP_Error(
                 'connector_disabled',
-                'The FlowMint Cowork connector is disabled for this site. Enable it in WordPress admin → FlowMint Workflows → Claude Connection.',
+                'The FlowMint Cowork connector is disabled for this site. Enable it in WordPress admin → FlowMint Workflows → Connector.',
                 [ 'status' => 403 ]
             );
         }

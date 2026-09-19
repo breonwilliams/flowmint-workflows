@@ -249,8 +249,12 @@ Variables resolve to STRINGS in template contexts. For numeric / boolean compari
 
 In a conditional expression:
 "{{ data.estimated_quantity == '50_100' }}"  → string compare, works
-"{{ length(data.notes) > 100 }}"  → length() returns int, > does numeric compare
+"{{ length(data.notes) }} > 100"  → length() returns int, > does numeric compare
 ```
+
+A function call must sit alone in its `{{ }}` with the operator outside:
+`"{{ length(data.notes) > 100 }}"` never calls `length()` — the parser reads
+the name as a missing path. See CONNECTOR_API.md, "Expressions".
 
 ### Array fields
 
@@ -299,7 +303,7 @@ When a step fails inside the workflow, the executor decides whether to retry bas
 - The workflow's `max_retries` setting
 - The current `retry_count` on the run
 
-If retrying, the executor throws an exception that Action Scheduler catches and reschedules with backoff.
+If retrying, `FMW_Workflow_Job::handle_failure` sets the run back to `queued` and rethrows — but Action Scheduler does not retry a one-off async action, so the run is stranded in Queued with no alert and cannot be replayed. Until that is fixed, workflows should set `settings.max_retries: 0` (`TROUBLESHOOTING.md`, "Run stuck in Queued").
 
 ### Avoiding the worker timeout
 

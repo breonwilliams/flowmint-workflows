@@ -148,6 +148,29 @@ Scheduler. Workflow runs become near-instant after submission.
 **For client onboarding:** include cron setup as part of the deployment
 checklist. Don't ship FMW to production without a real cron.
 
+### Run stuck in Queued (automatic retries do not happen)
+
+**Symptom:** a run stays **Queued** in Run History indefinitely, and its
+`fmw_run_workflow` action (Tools → Scheduled Actions, group `fmw`) shows
+**Failed**. No failure alert was sent, and **Replay** refuses the run
+(`cannot_replay` — only failed, cancelled or completed runs replay).
+
+**Cause:** when a run fails with a retryable error (anything not in
+`FMW_Step_Exception::is_retryable`'s list — e.g. `external_5xx`, a
+timeout, `upstream_shape`) and `retry_count` is below
+`settings.max_retries` (default 3), `FMW_Workflow_Job::handle_failure`
+sets the run back to `queued` and rethrows so that Action Scheduler would
+retry it. Action Scheduler does not retry a one-off async action: it
+marks the action failed and never runs it again. The run is left queued,
+never reaches `failed`, so `fmw_workflow_run_failed` — and the alert —
+never fire. A fix is pending a decision.
+
+**Workaround:** set `"settings": { "max_retries": 0 }` in every
+workflow's config. Every failure is then final: the run is marked
+**Failed**, the alert goes out, and it can be replayed once the cause is
+fixed. Nothing is lost by this — the retry the setting promised was never
+happening.
+
 ### Composer's `platform_check.php` can lock the plugin to one PHP version
 
 Composer's autoloader generates a `vendor/composer/platform_check.php`

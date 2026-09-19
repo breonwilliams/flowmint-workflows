@@ -99,6 +99,8 @@ const TOOLS = [
       "Create a new workflow. BEFORE your first create in a session, call flowmint_preflight and WebFetch the returned schema_document_url so you understand the workflow JSON shape and step-type contracts. " +
       "The 'config' argument MUST be a JSON STRING (not an object) conforming to the FlowMint workflow schema. JSON.stringify your config object before passing it in. The config defines a steps array — each step has { name, type, config, on_error?, skip_if? } (skip_if is an expression; there is no 'when' key) where `name` is a unique-within-workflow identifier (snake_case recommended) and `type` is one of the registered step types. Use flowmint_list_step_types to see what types are available and their config shapes. " +
       "FlowMint workflows trigger off the pforms_submission_complete action — bind a workflow to a Promptless Forms form via the form_id field (or omit form_id and pass an explicit `trigger` block in config for schedule-triggered workflows). The workflow runs asynchronously through Action Scheduler, never blocking the form submission. " +
+      "ONE WORKFLOW PER FORM: a submission runs only the most recently updated ENABLED workflow for its form. Enabling or editing a second workflow for the same form_id silently takes over, and the first stops running with no error — check flowmint_list_workflows with form_id first, and put everything a form needs into one workflow. " +
+      "A workflow created without enabled:true is saved DISABLED. " +
       "Workflows created via this tool are automatically tagged managed_by='connector:cowork' (unless overridden) and start at connector_version=1. Conflicts on an existing ID return already_exists (409) — use flowmint_update_workflow instead.",
     inputSchema: {
       type: "object",
@@ -124,9 +126,9 @@ const TOOLS = [
         },
         enabled: {
           type: "boolean",
-          default: true,
+          default: false,
           description:
-            "Whether the workflow runs when triggered. Set false to stage a workflow without it firing.",
+            "Whether the workflow runs when triggered. Omitted means false: the workflow is saved disabled. Pass true to make it live (and remember it then replaces any other enabled workflow for the same form).",
         },
         managed_by: {
           type: "string",
@@ -183,7 +185,8 @@ const TOOLS = [
   {
     name: "flowmint_test_workflow",
     description:
-      "Validate a workflow config without executing it. Returns { valid, errors, warnings }. workflow_id is REQUIRED and must name a saved workflow: pass config (a JSON STRING) to validate changes to it before saving them, or omit config to validate what is stored. To validate a brand-new workflow, create it with enabled:false, test it, then enable it with flowmint_update_workflow.",
+      "Validate a workflow config without executing it. Returns { valid, errors, warnings }. workflow_id is REQUIRED: pass config (a JSON STRING) to validate that config (the id is then not looked up), or omit config to validate the saved workflow's config. " +
+      "This is a SHALLOWER check than create/update: it does not check that the form exists, and it checks top-level steps only — steps nested inside conditional or try_catch are not validated here (nor by create/update), so a mistake there surfaces only when a run reaches it. A config that passes this test can still be rejected by flowmint_create_workflow / flowmint_update_workflow.",
     inputSchema: {
       type: "object",
       properties: {
@@ -236,7 +239,7 @@ const TOOLS = [
   {
     name: "flowmint_replay_run",
     description:
-      "Replay a finalized run (failed, cancelled, or completed). Creates a new run that references the parent run, then enqueues it via Action Scheduler. Returns the new_run_id and parent_run_id. Use after fixing a configuration bug to retry a failed run.",
+      "Replay a finalized run (failed, cancelled, or completed). Creates a new run that references the parent run, then enqueues it via Action Scheduler. Returns the new_run_id and parent_run_id. Use after fixing a configuration bug to retry a failed run. The replay starts from the first step with the same entry and the workflow's CURRENT saved config; it cannot resume part-way or change the entry's data, and it runs even if the workflow is disabled. A run left in 'queued' cannot be replayed.",
     inputSchema: {
       type: "object",
       properties: {
@@ -278,7 +281,7 @@ const TOOLS = [
   {
     name: "flowmint_list_credentials",
     description:
-      "List the credential keys this site supports (drive_service_account, printavo_api_token, slack_webhook, notification_email) and whether each is configured. NEVER returns plaintext values — only configured-state booleans. Credential VALUES are set through the WordPress admin, not through this MCP.",
+      "List the credential keys this site supports (drive_service_account, printavo_api_token, slack_webhook, notification_email) and whether each is configured. NEVER returns plaintext values — only configured-state booleans. Credential VALUES cannot be set through this MCP and there is no admin screen for them: a person sets each one with PUT /wp-json/flowmint/v1/connector/credentials/{key} and body {\"value\": \"...\"} (App Password auth, connector enabled). printavo_api_token's value is a JSON string {\"email\": \"...\", \"token\": \"...\"}.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -288,7 +291,7 @@ const TOOLS = [
   {
     name: "flowmint_test_credential",
     description:
-      "Test a stored credential against its target service. For drive_service_account, lists Drive about info. For printavo_api_token, calls the Printavo /account endpoint. Returns { test_result: 'ok' | 'failed', details? | error? }. Use this to verify a credential works before binding a workflow that depends on it.",
+      "Test a stored credential. For printavo_api_token, makes a real Printavo API call for the account. For drive_service_account, does NOT contact Google: it only checks the stored JSON parses and echoes client_email and project_id, so a revoked key or an unshared folder still tests ok. slack_webhook and notification_email cannot be tested (not_testable). Returns { test_result: 'ok' | 'failed', details? | error? }.",
     inputSchema: {
       type: "object",
       properties: {
@@ -351,7 +354,7 @@ function getConfig() {
   }
   if (!username || !appPassword) {
     throw new Error(
-      "FLOWMINT_USERNAME and FLOWMINT_APP_PASSWORD must both be set. Generate an Application Password through the FlowMint Workflows → Claude Connection admin page."
+      "FLOWMINT_USERNAME and FLOWMINT_APP_PASSWORD must both be set. Generate an Application Password through the FlowMint Workflows → Connector admin page."
     );
   }
 
