@@ -10,7 +10,7 @@ This is the technical design contract for the plugin. Phase 1+ code MUST follow 
 │                                                                           │
 │  Form submitted → validate → store entry → attach files →                 │
 │                                                                           │
-│  do_action('fre_submission_complete', $entry_id, $form_id, $data)         │
+│  do_action('pforms_submission_complete', $entry_id, $form_id, $data)      │
 └────────────────────────────────────────┬──────────────────────────────────┘
                                          │
                                          ▼
@@ -86,7 +86,7 @@ flowmint-workflows/
       class-fmw-workflow-context.php  # Runtime state during execution
       class-fmw-workflow-executor.php # Runs the steps
       class-fmw-workflow-job.php      # Action Scheduler job handler
-      class-fmw-submission-listener.php # Listens to fre_submission_complete
+      class-fmw-submission-listener.php # Listens to pforms_submission_complete
       class-fmw-step-base.php         # Abstract base class for all steps
       class-fmw-step-registry.php     # Step type registration
       class-fmw-interpolator.php      # {{ variable }} substitution
@@ -329,7 +329,7 @@ A workflow definition's `config` field is JSON of this shape:
         "parent_id": "{{ steps.submission_folder.id }}",
         "file_field": "design_file"
       },
-      "skip_if": "{{ !has_file(entry, 'design_file') }}"
+      "skip_if": "!{{ has_file(entry, 'design_file') }}"
     },
     {
       "name": "create_quote",
@@ -365,12 +365,11 @@ A workflow definition's `config` field is JSON of this shape:
 Schema rules:
 - `version` is the workflow JSON schema version. Currently `1.0`. Used for forward compatibility.
 - `form_id` (legacy v0.5 shape) must match an existing FormEngine form ID at create-time (validated by calling FRE's registry). In v0.6+, this field is normalized into the new `trigger` block automatically — see "Trigger types" below.
-- `settings.max_retries`, `settings.retry_delay_seconds`, `settings.timeout_seconds` are workflow-level defaults. Individual steps can override.
-- `settings.on_failure_notify` is a list of notification channels. Possible values: `slack`, `email`, `none`.
+- `settings.max_retries` is the only setting the runtime reads (`FMW_Workflow_Job::get_max_retries`). `retry_delay_seconds`, `timeout_seconds` and `on_failure_notify` in the example above are not read by anything — failure alerts go to Slack or email as described in `SETUP_SLACK.md`.
 - `steps[].name` is unique within the workflow and is how downstream steps reference outputs (`{{ steps.<name>.<output_field> }}`).
 - `steps[].type` must be a registered step type (validated at create-time and at run-time).
 - `steps[].config` is the step's configuration. Schema is per-step-type; documented in `STEP_LIBRARY.md`.
-- `steps[].on_error` is `fail` (default — fail the run), `continue` (log error, skip this step's outputs, continue), or `retry` (use Action Scheduler retry).
+- `steps[].on_error` is `fail` (default — fail the run), `continue` (log error, skip this step's outputs, continue), or `retry` (same as `fail` today).
 - `steps[].skip_if` is a conditional expression. If it evaluates truthy, the step is skipped (status `skipped`).
 
 ## Trigger types (v0.6.0+)
@@ -432,7 +431,7 @@ Workflow configs use `{{ ... }}` for variable substitution. Resolved at step exe
 - `{{ form.<field> }}` — form metadata (e.g., `form.id`, `form.title`)
 - `{{ workflow.<field> }}` — workflow metadata (e.g., `workflow.id`, `workflow.title`)
 - `{{ run.<field> }}` — current run metadata (e.g., `run.id`, `run.started_at`)
-- `{{ env.<key> }}` — explicit safe environment values (whitelist; not raw `$_ENV`)
+- `{{ env.<key> }}` — exactly three values: `env.site_name`, `env.site_url`, `env.admin_email` (not raw `$_ENV`, and not stored credentials)
 - `{{ now(<format>) }}` — current timestamp, optional PHP date format
 - `{{ template(<name>) }}` — render a named template (resolves to a string)
 
@@ -441,6 +440,7 @@ Workflow configs use `{{ ... }}` for variable substitution. Resolved at step exe
 - Comparisons: `==`, `!=`, `>`, `<`, `>=`, `<=`
 - Logical: `&&`, `||`, `!`
 - Functions: `has_file(entry, '<field_key>')`, `is_empty(<value>)`, `length(<value>)`, `contains(<haystack>, <needle>)`
+- A function call must sit alone in its `{{ }}` with operators outside: `!{{ has_file(entry, 'x') }}`, `{{ length(data.notes) }} > 100`. Inside a shared `{{ }}` the call is never made (see CONNECTOR_API.md, "Expressions").
 
 Expressions are parsed by a custom small expression evaluator. NO eval, NO arbitrary PHP execution. The evaluator is documented in `STEP_LIBRARY.md` under the `conditional` step.
 
@@ -465,7 +465,7 @@ All workflow execution is async via Action Scheduler.
 
 ### Job lifecycle
 
-1. Form submitted → FE fires `fre_submission_complete`
+1. Form submitted → FE fires `pforms_submission_complete`
 2. `FMW_Submission_Listener::on_submission_complete()`:
    - Looks up workflow by form_id
    - If no workflow exists for this form, returns silently
@@ -495,7 +495,7 @@ All workflow execution is async via Action Scheduler.
 
 ### Retry policy
 
-Default: 3 retries with exponential backoff (60s, 240s, 900s — 1 min, 4 min, 15 min). Configurable per workflow via `settings.max_retries` and `settings.retry_delay_seconds`. Configurable per step via `step.max_retries`.
+Designed as: 3 retries with backoff, configurable per workflow via `settings.max_retries`. **As built, automatic retries do not happen:** a retryable failure with retries remaining sets the run back to `queued` and rethrows, but Action Scheduler does not retry a one-off action, so the run stays Queued with no alert and cannot be replayed. Until that is fixed, set `settings.max_retries: 0` — see `TROUBLESHOOTING.md`, "Run stuck in Queued". There is no `retry_delay_seconds` or per-step `max_retries`.
 
 Retries happen at the WORKFLOW level, not the step level. If step 5 of 10 fails, the WHOLE WORKFLOW retries from step 1. This is intentional — many workflows have order dependencies that make resuming from the failed step incorrect.
 
@@ -538,7 +538,7 @@ Steps that don't create external state (`set_variable`, `log`, `conditional`, et
 Each step can override the default error handling via `on_error`:
 - `fail` (default) — error fails the workflow run
 - `continue` — error is logged, the step's output is empty, the workflow continues to the next step
-- `retry` — same as `fail` but the failure triggers an Action Scheduler retry
+- `retry` — behaves exactly like `fail` today (the run-level retry applies to both, and currently strands the run in Queued — see Retry policy)
 
 `continue` is useful for non-critical steps (e.g., "send Slack notification" in a workflow that's primarily about creating a Quote — failure to send Slack shouldn't fail the whole workflow).
 
@@ -644,7 +644,7 @@ FlowMint Workflows uses these FormEngine APIs and ONLY these:
 
 ### Hooks consumed (FRE → FMW)
 
-- `fre_submission_complete($entry_id, $form_id, $sanitized_data)` — primary trigger; FMW listens here
+- `pforms_submission_complete($entry_id, $form_id, $sanitized_data)` — primary trigger; FMW listens here
 
 ### Classes used (FMW reads from FRE)
 

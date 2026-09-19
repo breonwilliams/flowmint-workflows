@@ -154,7 +154,7 @@ A homeowner fills out a "request a quote" form. The workflow:
       "config": {
         "url": "https://api.crm.example.com/v1/leads",
         "headers": {
-          "Authorization": "Bearer {{ env.crm_api_token }}",
+          "Authorization": "Bearer <CRM_API_TOKEN>",
           "Content-Type": "application/json"
         },
         "body": {
@@ -208,7 +208,7 @@ A homeowner fills out a "request a quote" form. The workflow:
       "name": "team_slack",
       "type": "http_post",
       "config": {
-        "url": "{{ env.slack_team_webhook }}",
+        "url": "<TEAM_SLACK_WEBHOOK_URL>",
         "body": {
           "text": "New {{ data.service_type }} lead: {{ data.first_name }} {{ data.last_name }} at {{ data.address }}. CRM: {{ steps.crm_sync.body.lead_id }}"
         }
@@ -224,9 +224,9 @@ A homeowner fills out a "request a quote" form. The workflow:
 ```
 
 Notes:
-- `crm_sync.on_error` defaults to `fail` — if the CRM is down, the workflow retries via Action Scheduler. After max retries, FlowMint is notified.
+- `crm_sync.on_error` defaults to `fail` — if the CRM is down, the run fails. Automatic retries do not currently work (a retryable failure strands the run in Queued with no alert), so set `"settings": { "max_retries": 0 }` to make every failure final, alerted and replayable — see `TROUBLESHOOTING.md`, "Run stuck in Queued".
 - `upload_photos.on_error` is `continue` — if photo upload fails, we still want the rest of the lead processing to complete. The lead is logged for manual upload later.
-- Notice `env.slack_team_webhook` — Slack webhook URL stored as a credential, not hardcoded.
+- The CRM token and the team Slack webhook URL are written into the steps' config. `{{ env.* }}` holds only `site_name`, `site_url` and `admin_email`, so a credential cannot be read from it (a missing path resolves to an empty string), and HTTP steps have no credential option. The token is therefore stored in the workflow config and recorded in each run's step config — use one scoped to the minimum access the step needs. (The `slack_webhook` credential is used only for FlowMint's own failure alerts.)
 
 ## Pattern 3: Appointment booking (consultation, service appointment)
 
@@ -249,7 +249,7 @@ A customer fills out a booking form. The workflow:
       "type": "http_get",
       "config": {
         "url": "https://api.scheduler.example.com/v1/availability",
-        "headers": { "Authorization": "Bearer {{ env.scheduler_token }}" }
+        "headers": { "Authorization": "Bearer <SCHEDULER_API_TOKEN>" }
       }
     },
     {
@@ -381,7 +381,7 @@ When a workflow has a critical step that might fail (external API down, etc.), u
         "config": {
           "to": "<TEAM_EMAIL>",
           "subject": "Failed Printavo Quote — manual entry needed",
-          "body": "Customer: {{ data.email }}\nForm data: {{ data | json }}"
+          "body": "Customer: {{ data.email }}\nForm entry: #{{ entry.id }}"
         }
       }
     ],
@@ -389,6 +389,8 @@ When a workflow has a critical step that might fail (external API down, etc.), u
   }
 }
 ```
+
+There are no filters in `{{ }}` — `{{ data | json }}` would resolve to an empty string — so the body points at the entry instead of dumping it.
 
 Result: if Printavo creation fails for ANY reason in the catch_codes list, the team is notified and the workflow continues (instead of failing the entire run). The customer still gets their ack email.
 
@@ -453,28 +455,31 @@ Some forms have multiple file fields where only one is filled depending on the f
   "config": {
     "parent_id": "{{ steps.submission_folder.id }}",
     "file_field": "tax_exempt_doc",
-    "rename_to": "tax_exempt_{{ data.full_name | snake_case }}.pdf"
+    "rename_to": "tax_exempt_{{ entry.id }}.pdf"
   },
   "skip_if": "{{ !steps.tax_doc_meta.exists }}"
 }
 ```
 
+(`rename_to` uses the entry id because there are no filters: `{{ data.full_name | snake_case }}` resolves to an empty string.)
+
 Each upload step has a `skip_if` that checks for file existence before attempting. Avoids the "file not found" error path entirely.
 
 ## Pattern 8: External system-of-record ingest (recreation programs, agendas, permits)
 
-**When the site must show data that lives somewhere else** — a recreation management system, an agenda manager, a licensing database — and staff must not enter it twice. The pattern is: scheduled fetch → per-record map → upsert into a Post Runtime record type, with an identity that makes re-running safe and guards that make an upstream change loud. **The pattern is the platform's; the mapping is the project's.** Do not build a vendor client: `http_get` plus a credential is the client.
+**When the site must show data that lives somewhere else** — a recreation management system, an agenda manager, a licensing database — and staff must not enter it twice. The pattern is: scheduled fetch → per-record map → upsert into a Post Runtime record type, with an identity that makes re-running safe and guards that make an upstream change loud. **The pattern is the platform's; the mapping is the project's.** Do not build a vendor client: `http_get` plus an API token in its headers is the client (see the credentials anti-pattern below for where that token ends up).
 
 ```json
 {
   "trigger": { "type": "schedule", "interval": "daily", "hour": 4, "minute": 30 },
+  "settings": { "max_retries": 0 },
   "steps": [
     {
       "name": "fetch",
       "type": "http_get",
       "config": {
         "url": "https://api.vendor.example/v1/programs?status=active",
-        "headers": { "Accept": "application/json", "Authorization": "Bearer {{ env.vendor_api_token }}" },
+        "headers": { "Accept": "application/json", "Authorization": "Bearer <VENDOR_API_TOKEN>" },
         "timeout_seconds": 60
       }
     },
@@ -516,25 +521,23 @@ Each upload step has a `skip_if` that checks for file existence before attemptin
 
 **What makes it safe to re-run:** identity is `(post_type, source, external_id)`, kept on the record by Post Runtime. Same feed → every record `unchanged`, nothing written. Changed record → `updated`, only the mapped keys. An editor's local edit to a field the map does not name survives.
 
-**What makes a change upstream loud:** `expect_min_records` catches an empty or re-shaped feed; `max_failure_ratio` catches a renamed field. Either fails the run and the failure notifier fires; nothing is drafted.
+**What makes a change upstream loud:** `expect_min_records` catches an empty or re-shaped feed; `max_failure_ratio` catches a renamed field. Either fails the run with `upstream_shape` and nothing is drafted. That code is retryable, so the failure notifier fires only with `"max_retries": 0` as above — otherwise the run is stranded in Queued with no alert (`TROUBLESHOOTING.md`, "Run stuck in Queued").
 
 **Do not** map a field you do not want overwritten every day, set `missing_upstream: "draft"` before the first few runs look right, or change `source` once records exist (it is part of their identity).
 
 ## Anti-patterns to avoid
 
-### ❌ Don't put credentials in workflow JSON
+### ⚠️ API tokens for HTTP steps live in the workflow JSON — keep them narrow
 
-Bad:
+There is currently no way to keep an HTTP step's token out of the workflow:
+
 ```json
-{ "headers": { "Authorization": "Bearer abc123def456..." } }
+{ "headers": { "Authorization": "Bearer <API_TOKEN>" } }
 ```
 
-Good:
-```json
-{ "headers": { "Authorization": "Bearer {{ env.crm_api_token }}" } }
-```
+Do **not** write `{{ env.crm_api_token }}`: `env` holds only `site_name`, `site_url` and `admin_email`, so that resolves to an empty string and the request goes out as `Bearer ` with no token. The encrypted credential store serves only the built-in Drive and Printavo steps and the failure alerts; HTTP steps have no credential option.
 
-Credentials live encrypted in `wp_options`, accessed via `{{ env.<key> }}`. Never put them in the JSON definition (which gets stored in DB plaintext, returned in REST responses, logged on errors).
+So the token is stored in the workflow config (plaintext in the database, returned by `GET /workflows/{id}`) and recorded in each run's step config. Use a token scoped to the minimum access the step needs, give it its own name at the vendor so it can be revoked alone, and rotate it by updating the workflow.
 
 ### ❌ Don't assume external APIs always succeed
 

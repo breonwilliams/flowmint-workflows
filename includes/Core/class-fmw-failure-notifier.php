@@ -113,8 +113,10 @@ class FMW_Failure_Notifier {
 		$workflow_name = $workflow_id;
 		if ( class_exists( 'FMW_Workflow_Repository' ) ) {
 			$workflow = FMW_Workflow_Repository::get( $workflow_id );
-			if ( is_array( $workflow ) && ! empty( $workflow['name'] ) ) {
-				$workflow_name = $workflow['name'];
+			// The workflows table has `title`, not `name`; the alert
+			// showed the id on every failure until 2026-09-19.
+			if ( is_array( $workflow ) && ! empty( $workflow['title'] ) ) {
+				$workflow_name = $workflow['title'];
 			}
 		}
 

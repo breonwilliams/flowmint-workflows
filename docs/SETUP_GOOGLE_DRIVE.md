@@ -96,17 +96,7 @@ Save this — you'll reference it in workflow definitions as the `parent_id`.
 
 ## Step 7: Configure FlowMint Workflows with the credential
 
-Two options:
-
-### Option A: WordPress admin UI (Phase 5 onward)
-
-1. WP Admin → FlowMint Workflows → Settings
-2. Section "Google Drive"
-3. Paste the entire JSON content of the key file into the "Service Account JSON" field
-4. Click "Save"
-5. Click "Test Connection" — should report the service account email
-
-### Option B: REST API (works from Phase 1)
+There is no admin screen for credentials and no MCP tool that sets one: the REST route below is the only way. It requires the connector to be enabled (**FlowMint Workflows → Connector**) and an Application Password for a user with the `flowmint_manage_workflows` capability.
 
 ```
 PUT /wp-json/flowmint/v1/connector/credentials/drive_service_account
@@ -123,12 +113,7 @@ Then test:
 POST /wp-json/flowmint/v1/connector/credentials/drive_service_account/test
 ```
 
-### Option C: Via Claude / MCP
-
-Just ask Claude:
-> "Configure the Drive service account credential. Here's the JSON: <paste>"
-
-Claude calls `workflow_credentials_set` then `workflow_credentials_test`.
+**This test does not contact Google.** It only checks that the stored JSON parses and has a `client_email`, and echoes `service_account_email` and `project_id` back (`FMW_Drive_Client::test`). A revoked key, a disabled Drive API or a folder not shared with the service account all still test `ok`. Step 8 is the real check. (`flowmint_test_credential` over MCP runs the same test.)
 
 ## Step 8: Verify with a trivial workflow
 
@@ -153,7 +138,7 @@ Create a test workflow that does nothing but list the workspace folder:
 }
 ```
 
-Submit a form (or use the workflow_test endpoint with `dry_run: false`) and verify the run completes successfully. The output should show the folder metadata or `found: false` (also fine — proves the service account can query).
+Bind it to a test form that no live workflow uses — only one enabled workflow runs per form, and enabling this one would silently replace any other on the same form — set `enabled: true`, submit the form, and verify the run completes successfully; then disable it again. (`/test` only validates the config; it never runs a step.) The output should show the folder metadata or `found: false` (also fine — proves the service account can query).
 
 ## Sharing strategy for client workspaces
 

@@ -43,7 +43,7 @@ Phase 4 — Decommission (after observation period):
 
 - FlowMint Workflows plugin installed and active on the client's WP install
 - All required credentials configured (Drive service account, Printavo API token, Slack webhook for failure notifications)
-- Test connections all pass via `workflow_credentials_test`
+- Credentials tested via `flowmint_test_credential` where possible: the Printavo test makes a real call, but the Drive test only checks the stored JSON (it never contacts Google) and the Slack webhook cannot be tested — prove those with a real run on a test form
 - Existing Zap is documented: list of every step, every field mapping, every config value (this becomes the workflow JSON)
 
 ### Step 1: Document the current Zap exhaustively
@@ -212,7 +212,7 @@ To replicate Zap's halt-the-whole-workflow behavior:
   "name": "halt_if_no_file",
   "type": "conditional",
   "config": {
-    "if": "{{ !has_file(entry, 'design_file') }}",
+    "if": "!{{ has_file(entry, 'design_file') }}",
     "then": [
       { "name": "log_no_file", "type": "log_warning", "config": {"message": "Halting: no design file"} }
     ]
@@ -226,9 +226,11 @@ Then use `skip_if` on every subsequent step:
   "name": "upload",
   "type": "drive_upload_file",
   "config": { ... },
-  "skip_if": "{{ !has_file(entry, 'design_file') }}"
+  "skip_if": "!{{ has_file(entry, 'design_file') }}"
 }
 ```
+
+The `!` goes outside the braces: written as `{{ !has_file(...) }}`, the function is never called and the condition is always true (see CONNECTOR_API.md, "Expressions").
 
 (Or — better — restructure the workflow so the file-dependent steps are inside a `conditional`'s `then` block.)
 

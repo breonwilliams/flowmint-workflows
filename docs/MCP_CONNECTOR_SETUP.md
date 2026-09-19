@@ -29,8 +29,8 @@ If you've already set up the FRE or Promptless connectors, this one looks and fe
 - **Node.js 14+** installed. Works with Homebrew-installed Node, the official installer, or nvm-managed versions.
 - **Claude Desktop** installed and launched at least once (so its config directory exists).
 - **WordPress site reachable over HTTPS** with Application Passwords enabled. WordPress enforces HTTPS for Application Passwords by default; the `WP_ENVIRONMENT_TYPE=local` constant waives this for Local by Flywheel and similar local-dev environments.
-- **Form Runtime Engine 1.6.0+ active** on the same site. FlowMint depends on FRE — workflows trigger off `fre_submission_complete`, the action FRE fires after a form submission. If FRE is missing or out-of-date, FlowMint surfaces an admin notice and refuses to initialize.
-- **Action Scheduler** loaded (bundled in FRE; FlowMint also ships its own copy). Verifiable on the Claude Connection page — preflight reports `action_scheduler_active: true` when it's working.
+- **Promptless Forms (formerly Form Runtime Engine) 1.8.0+ active** on the same site. FlowMint depends on it — workflows trigger off `pforms_submission_complete`, the action Promptless Forms fires after a form submission. If FRE is missing or out-of-date, FlowMint surfaces an admin notice and refuses to initialize.
+- **Action Scheduler** loaded (bundled in FRE; FlowMint also ships its own copy). Verifiable on the Connector page — preflight reports `action_scheduler_active: true` when it's working.
 
 ---
 
@@ -38,7 +38,7 @@ If you've already set up the FRE or Promptless connectors, this one looks and fe
 
 Three steps, each done once per site:
 
-1. On your WordPress site, open **FlowMint Workflows → Claude Connection** in the admin.
+1. On your WordPress site, open **FlowMint Workflows → Connector** in the admin.
 2. Enable the **Claude Cowork Connection** toggle (Step 1 on the page). The kill switch is **off by default**; nothing works until you flip it on. Every connector REST endpoint returns 403 `connector_disabled` while it's off — the only exception is `/preflight`, which Claude can call to discover that the kill switch is off.
 3. Click **Generate Connection** (Step 2). WordPress creates an Application Password named "FlowMint Workflows — Claude Cowork" for your user, revoking any prior FlowMint connector credential for you. The password displays once — do not close the page until you have copied the bash command in Step 3.
 
@@ -120,11 +120,11 @@ Credential **values** are intentionally not settable through the MCP. Storing se
 
 The toggle is per-site. Check that you're hitting the right WordPress site — `FLOWMINT_SITE_URL` in your Claude Desktop config must point at the same install where you flipped the toggle. Cross-site mistakes happen often when a site has staging and production with similar URLs.
 
-If the URL is right and preflight still shows `false`, the option may not have saved. Refresh the Claude Connection page; if the toggle appears off, flip it on again. The toggle uses an AJAX save, so a flaky network can leave the UI looking on while the server-side option is unchanged.
+If the URL is right and preflight still shows `false`, the option may not have saved. Refresh the Connector page; if the toggle appears off, flip it on again. The toggle uses an AJAX save, so a flaky network can leave the UI looking on while the server-side option is unchanged.
 
 ### `connector_disabled` 403 on every endpoint except preflight
 
-That's the kill switch doing its job. Open WP admin → FlowMint Workflows → Claude Connection → flip "Enable Claude Cowork Connection" on. The response code is intentional — preflight stays open so Claude can detect the disabled state and tell you, rather than every other endpoint silently failing.
+That's the kill switch doing its job. Open WP admin → FlowMint Workflows → Connector → tick "Allow Claude Cowork to call this site". The response code is intentional — preflight stays open so Claude can detect the disabled state and tell you, rather than every other endpoint silently failing.
 
 ### `Authentication required` on every REST call
 
@@ -142,7 +142,7 @@ Step types that depend on Composer-loaded vendor libraries (Google API client fo
 
 Run `flowmint_preflight` and check `action_scheduler_active`. If `false`, Action Scheduler isn't loaded — usually means `composer install` hasn't run in the FlowMint plugin directory. Run it.
 
-If `action_scheduler_active: true` but workflows still don't fire, check that the workflow's `enabled` flag is true (`flowmint_get_workflow` shows it) and that its `form_id` matches the actual form being submitted. Workflows trigger off `fre_submission_complete` keyed on the form_id field.
+If `action_scheduler_active: true` but workflows still don't fire, check that the workflow's `enabled` flag is true (`flowmint_get_workflow` shows it) and that its `form_id` matches the actual form being submitted. Workflows trigger off `pforms_submission_complete` keyed on the form_id field — and only one enabled workflow runs per form (the most recently updated), so check no other enabled workflow is bound to the same form.
 
 ### I want to revoke Cowork access immediately
 

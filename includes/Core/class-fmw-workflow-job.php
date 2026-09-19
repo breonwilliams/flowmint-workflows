@@ -126,6 +126,27 @@ class FMW_Workflow_Job {
             $run['form_id']
         );
 
+        // Titles for {{ workflow.title }} / {{ form.title }} — documented in
+        // ARCHITECTURE.md and SCHEDULED_WORKFLOWS.md, and always empty until
+        // 2026-09-19 because nothing called these setters. Additive: a
+        // workflow that never referenced them renders exactly as before.
+        if ( class_exists( 'FMW_Workflow_Repository' ) ) {
+            $workflow_record = FMW_Workflow_Repository::get( $run['workflow_id'] );
+            if ( is_array( $workflow_record ) ) {
+                $context->set_workflow_metadata( $workflow_record );
+            }
+        }
+        // fre()->registry->get() is on the INTEGRATION_FRE.md allowlist.
+        if ( ! empty( $run['form_id'] ) && function_exists( 'pforms' ) && pforms()->registry ) {
+            $form_config = pforms()->registry->get( $run['form_id'] );
+            if ( is_array( $form_config ) ) {
+                $context->set_form_metadata( [
+                    'id'    => $run['form_id'],
+                    'title' => isset( $form_config['title'] ) ? (string) $form_config['title'] : '',
+                ] );
+            }
+        }
+
         // Scheduled run sentinel: entry_id === 0 means "no entry".
         // Skip the FE fetch — there's nothing to load.
         if ( (int) $run['entry_id'] <= 0 ) {

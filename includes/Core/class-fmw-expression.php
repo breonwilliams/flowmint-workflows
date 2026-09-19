@@ -7,7 +7,13 @@
  *
  *   "{{ has_file(entry, 'design_file') }}"
  *   "{{ data.budget_range == '5000_plus' }}"
- *   "{{ length(data.notes) > 100 && !is_empty(data.full_name) }}"
+ *   "!{{ has_file(entry, 'design_file') }}"
+ *
+ * NOT supported (as of 2026-09-19): a function call that shares its {{ }}
+ * with an operator — "{{ length(x) > 100 }}", "{{ !has_file(...) }}" — is
+ * tokenized as a path and the call never runs, so the result is constant.
+ * Keep each call alone in its braces and put operators outside them
+ * (docs/CONNECTOR_API.md, "The workflow language").
  *
  * Implementation: a tiny precedence-climbing parser. NOT eval. NO arbitrary
  * PHP execution.

@@ -139,12 +139,14 @@ Expressions are parsed by `FMW_Expression`. NOT eval. NOT arbitrary PHP. The gra
 ```
 expr := comparison ( ('&&' | '||') comparison )*
 comparison := value ( ('==' | '!=' | '>' | '<' | '>=' | '<=') value )?
-value := variable | literal | '!' value | '(' expr ')' | function_call
+value := variable | literal | '!' value | '(' expr ')'
 literal := string | number | true | false | null
-variable := '{{ ... }}' (interpolated to a value)
+variable := '{{ path }}' | '{{ function_call }}' (interpolated to a value)
 function_call := identifier '(' arg ( ',' arg )* ')'
-arg := expr | literal
+arg := path | literal
 ```
+
+**A function call must be the whole content of its `{{ }}`**, with operators outside: `!{{ has_file(entry, 'photo') }}`, `{{ length(data.notes) }} > 100`. Written as `{{ !has_file(entry, 'photo') }}` or `{{ length(data.notes) > 100 }}`, the call is never made (the name is read as a missing path), so the first is always true. When an expression has several `{{ }}` blocks, wrap each in parentheses — `({{ has_file(entry, 'a') }}) && ({{ has_file(entry, 'b') }})` — because an expression that starts with `{{` and ends with `}}` is otherwise read as one block. A single `{{ }}` holding only paths and literals may contain operators: `{{ data.service == 'pothole' || data.service == 'streetlight' }}`. See `CONNECTOR_API.md`, "Expressions".
 
 Available functions:
 - `has_file(entry, '<field_key>')` — entry has a file attached for the given field
@@ -231,7 +233,7 @@ Three step types with identical config, different log levels.
 
 **Output:** `{ "logged": true }`
 
-`log_error` ALSO sends a notification to FlowMint via the configured notification channel(s).
+`log_error` sends **no** notification. All three write to the PHP error log (only when `WP_DEBUG_LOG` is on) and fire the `fmw_log` action, which nothing subscribes to by default; the step succeeds. To alert a person, use `send_email`, or let the run fail — a failed run triggers the failure alert.
 
 ---
 
@@ -766,18 +768,20 @@ Convenience wrappers for the most common cases.
 {
   "url": "https://api.example.com/v1/widgets/{{ data.widget_id }}",
   "headers": {
-    "Authorization": "Bearer {{ env.example_api_token }}"
+    "Authorization": "Bearer <API_TOKEN>"
   },
   "timeout_seconds": 30
 }
 ```
+
+**API tokens go in `headers` as written text.** HTTP steps have no credential option, and `{{ env.* }}` holds only `site_name`, `site_url` and `admin_email` — `{{ env.example_api_token }}` resolves to an empty string. The token is therefore stored in the workflow config and recorded in each run's step config; use a token scoped to the minimum access the step needs.
 
 **Config (http_post):**
 ```json
 {
   "url": "https://api.example.com/v1/widgets",
   "headers": {
-    "Authorization": "Bearer {{ env.example_api_token }}",
+    "Authorization": "Bearer <API_TOKEN>",
     "Content-Type": "application/json"
   },
   "body": {
@@ -834,7 +838,7 @@ Full control over HTTP method, headers, body. Use for PUT/PATCH/DELETE or unusua
 
 ## Post Runtime (Phase 4)
 
-The ingest step. Post Runtime owns the record types (programs, agendas, permits…); this step keeps them in sync with a system of record without duplicating and without touching what has not changed. Requires Post Runtime Engine 0.8.2+ (its `upsert_external`).
+The ingest step. Post Runtime owns the record types (programs, agendas, permits…); this step keeps them in sync with a system of record without duplicating and without touching what has not changed. Requires Post Runtime Engine 0.9.0+ (its `upsert_external`).
 
 ### `pre_upsert_records`
 

@@ -46,10 +46,12 @@ v0.6 supports a fixed enum of four intervals. Full cron expressions (e.g. `0 2 *
 
 | Interval | Description | `hour` / `minute` / `day_of_week` honored? |
 |---|---|---|
-| `hourly` | Every hour, first run roughly an hour after the workflow is saved | No — fires on the hour boundary AS chose |
-| `twicedaily` | Every 12 hours from the moment the workflow is saved | No |
+| `hourly` | Every hour, first run one hour after the workflow is saved | No — not on the hour: every tick falls at the minute you saved it (`FMW_Schedule_Listener::compute_next_run_timestamp`) |
+| `twicedaily` | Every 12 hours, first run 12 hours after the workflow is saved | No |
 | `daily` | Once per day at `hour:minute` site-local | `hour` (0–23) and `minute` (0–59) |
 | `weekly` | Once per week at `hour:minute` site-local on `day_of_week` | All three fields |
+
+**Saving restarts the clock.** Every save of an enabled scheduled workflow (any update, not just a schedule change) unschedules and re-registers its event, so an `hourly` workflow edited every 50 minutes never runs, and a `twicedaily` one moves to 12 hours after the latest save. `daily` and `weekly` are unaffected — they are pinned to `hour:minute`.
 
 **Site timezone matters.** When you specify `hour: 2`, that's **2am in your WordPress site's timezone** (`Settings → General → Timezone`), not UTC. The plugin handles the conversion. So if your site's timezone is `America/New_York` and you set `hour: 2`, the workflow fires at 2am Eastern, regardless of where the server is physically located.
 
@@ -116,8 +118,8 @@ There's also a **daily reconciliation pass** that runs in the background and bri
 ```
 
 A scheduled run looks identical to a form-triggered run in run history, except:
-- The "Entry" column shows `—` (there's no entry to link to).
-- The "Form" column shows `—`.
+- The "Entry" column shows `#0` (there's no entry; 0 is the sentinel).
+- The "Form" column is blank.
 
 ## Full example: daily entry retention
 
@@ -134,7 +136,7 @@ The original use case that motivated this feature — purge FE entries older tha
     "minute": 0
   },
   "settings": {
-    "max_retries": 1
+    "max_retries": 0
   },
   "steps": [
     {
@@ -178,6 +180,8 @@ Walk-through:
 3. **`purge`** — Bulk-deletes the found entries. `on_error: continue` means a single failed delete doesn't fail the whole run; failures end up in `failed[]` and the log step still runs.
 4. **`log_done`** — Reports the counts. The numbers flow in via `{{ steps.purge.deleted_count }}` etc.
 
+`max_retries: 0` makes every failure final, so it is alerted and can be replayed — automatic retries currently strand a run in Queued instead (`TROUBLESHOOTING.md`, "Run stuck in Queued").
+
 Scoping options if you don't want a blanket policy:
 
 - **One form only:** add `"form_id": "bulk-order-quote"` to the `find_old` config.
@@ -196,10 +200,7 @@ Two checks after creating a scheduled workflow:
    You should see one pending action per enabled scheduled workflow, with the workflow ID in the args column and a future `scheduled_date_gmt`.
 
 2. **First run after the schedule fires.** Wait for the schedule to fire (or fast-forward in dev), then check:
-   ```
-   wp flowmint runs list
-   ```
-   (Or via the connector tool `flowmint_list_runs`.) The completed scheduled run should appear with `form_id=''`, `entry_id=0`, and status `completed`.
+   FlowMint has no WP-CLI commands of its own. Use WP Admin → FlowMint Workflows → Run History, or the connector tool `flowmint_list_runs` with `workflow_id`. The scheduled run should appear with `form_id=''`, `entry_id=0` (shown as `#0` and a blank form in Run History), and status `completed`.
 
 ## Limitations of v0.6.0
 

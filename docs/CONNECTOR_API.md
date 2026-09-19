@@ -10,7 +10,8 @@ This namespace is independent of FormEngine's `/wp-json/fre/v1/connector/...`. T
 
 ## Authentication
 
-- **REST endpoints:** WordPress App Password via Basic Auth, plus `manage_options` capability check
+- **REST endpoints:** WordPress App Password via Basic Auth, plus the `flowmint_manage_workflows` capability (granted to administrators by default; the name is filterable via `flowmint_manage_workflows_capability`) (`FMW_REST_Auth::require_manage`)
+- **Connector switch:** every endpoint except `/preflight` also requires the connector to be enabled in **FlowMint Workflows → Connector**; otherwise it returns `403 connector_disabled`. It is off by default.
 - **MCP tools:** authenticated via the same App Password Basic Auth (the MCP layer translates tool calls to REST calls under the hood)
 
 ## Versioning
@@ -49,8 +50,19 @@ code comment.)
   optional `hour` (0–23), `minute` (0–59) and `day_of_week`, site-local
   (`FMW_Workflow_Validator`, `FMW_Schedule_Listener`). There is no "run now"
   for a scheduled workflow; replay a finished run instead.
+- **One workflow per form.** A submission runs only ONE workflow: the
+  most recently updated *enabled* form-triggered workflow for that form
+  (`FMW_Workflow_Repository::get_for_form`, `ORDER BY updated_at DESC
+  LIMIT 1`). Enabling or editing a second workflow for the same form
+  silently takes over from the first, which stops running without any
+  error. Put everything a form needs into one workflow, and disable or
+  delete the old one when you replace it.
 - **`settings.max_retries`** — how many times a failed run is retried;
-  default 3 (`FMW_Workflow_Job::get_max_retries`).
+  default 3 (`FMW_Workflow_Job::get_max_retries`). **Automatic retries do
+  not currently work:** a run that fails with a retryable error while
+  retries remain is left in `queued` and never runs again, sends no alert
+  and cannot be replayed. Set `"max_retries": 0` so every failure is final,
+  alerted and replayable — see TROUBLESHOOTING.md, "Run stuck in Queued".
 - **`steps`** — an ordered list. Each step is `{ name, type, config }` plus
   the optional keys below. `name` is unique within the workflow; later
   steps read this step's output as `{{ steps.<name>.<field> }}`. `type` is
@@ -61,9 +73,9 @@ code comment.)
 | Key | Meaning |
 |---|---|
 | `skip_if` | An expression. When it is truthy the step is skipped and recorded as skipped with the expression as the reason (`FMW_Workflow_Executor`). There is no `when` key — a step with `when` runs every time. |
-| `on_error` | `fail` (default), `continue` or `retry`. `continue` records the failure, gives the step the output `{ failed: true, error: <code> }` and carries on. `fail` and `retry` both end the run as failed; the run is then retried if the error is retryable and retries remain. The two behave the same today. |
+| `on_error` | `fail` (default), `continue` or `retry`. `continue` records the failure, gives the step the output `{ failed: true, error: <code> }` and carries on. `fail` and `retry` both end the run as failed; the run is then marked for retry if the error is retryable and retries remain (which currently strands it in `queued` — see `settings.max_retries` above). The two behave the same today. |
 
-**A retry runs the whole workflow again from the first step**, with a fresh
+**A retry — and a replay — runs the whole workflow again from the first step**, with a fresh
 context (`FMW_Workflow_Job::handle`) — it does not resume at the failed
 step. Steps with side effects are written to be safe to repeat:
 `send_email` skips a send it already made in the same run to the same
@@ -83,7 +95,10 @@ Any string in a step's `config` may contain `{{ … }}`
 - **A context path** — `data.email`, `labels.service`, `entry.id`,
   `steps.find.contact_id`, `vars.team`, `run.id`, `workflow.id`, `form.id`,
   `entry_files.<field_key>`, and inside `pre_upsert_records`'s `map`,
-  `item.<field>`. The preflight's `context_shape` describes each namespace.
+  `item.<field>`. `env` holds exactly three values — `env.site_name`,
+  `env.site_url`, `env.admin_email` (`FMW_Workflow_Context`) — and nothing
+  else: stored credentials cannot be read through `{{ env.* }}`. The
+  preflight's `context_shape` describes each namespace.
   **A path that does not exist resolves to an empty string**, and the step
   still succeeds — check paths against the run history.
 - **A fallback** — `{{ data.company || data.full_name }}` gives the first
@@ -119,11 +134,21 @@ For a select, radio or checkbox, `data.*` is the stored option value
 
 ```json
 { "if": "{{ data.service == 'pothole' || data.service == 'streetlight' }}" }
-{ "skip_if": "{{ !has_file(entry, 'photo') }}" }
+{ "skip_if": "!{{ has_file(entry, 'photo') }}" }
+{ "if": "{{ length(data.notes) }} > 100" }
+{ "if": "({{ has_file(entry, 'photo') }}) && ({{ is_empty(data.notes) }})" }
 ```
 
-A bare function call inside a comparison (`length(x) > 5`) is not yet
-supported by the parser.
+**A function call must sit alone in its `{{ }}`, with any operator
+outside the braces.** When a call shares one `{{ }}` with `!`, `&&`, `||`
+or a comparison, the call is never made — its name is read as a missing
+path — so `{{ !has_file(entry, 'photo') }}` is always true and
+`{{ length(data.notes) > 100 }}` never measures the notes (`FMW_Expression::evaluate`
+and its tokenizer). Paths and literals may share one `{{ }}` with
+operators, as in the first example. When an expression holds more than
+one `{{ }}`, keep every operator outside the braces and wrap each block in
+parentheses: an expression that begins with `{{` and ends with `}}` is
+otherwise read as a single block, and the calls inside it are not made.
 
 ### Nested steps
 
@@ -250,13 +275,18 @@ Create a new workflow.
 
 `config` MUST be a JSON STRING. Object form is rejected with `code: invalid_json`.
 
-Validation:
+**`enabled` defaults to false.** A workflow created without `"enabled": true` is saved disabled and does not run (`FMW_Workflow_Repository::create`).
+
+**One workflow per form:** enabling or editing a second workflow for the same `form_id` makes it the one that runs, and the first silently stops — see "One workflow per form" above.
+
+Validation (`FMW_Workflow_Validator::validate_full`, also used by PATCH):
 - `id` matches `^[a-z0-9\-_]+$`
 - `id` does not already exist (use PATCH to update)
-- `form_id` exists in FormEngine
-- `config` is valid JSON
-- `config` matches the workflow JSON schema (validated against `STEP_LIBRARY.md` step types)
-- All step types referenced exist in the registry
+- `form_id` exists in Promptless Forms (a warning, not an error, when Promptless Forms is not loaded)
+- `config` is valid JSON with a `trigger` block (or a top-level `form_id`) and a `steps` array
+- each **top-level** step has a unique `name`, a registered `type`, a valid `on_error` and an object `config`
+
+Not checked: steps nested inside `conditional` (`then`/`else`) or `try_catch` (`try`/`catch`) — an unknown type or bad key there is found only when the run reaches it — and the contents of each step's `config` against the step type's schema.
 
 **Response (201):**
 ```json
@@ -272,10 +302,8 @@ Validation:
 ```
 
 **Errors:**
-- `400 invalid_workflow_id` — id format invalid
-- `400 form_not_found` — form_id doesn't exist in FRE
-- `400 invalid_config` — config JSON malformed
-- `400 invalid_step_type` — references unknown step type
+- `400 invalid_json` — body is not JSON, or `config` is an object instead of a string
+- `400 invalid_workflow` — validation failed; `data.errors` lists each problem (bad id, unknown form, malformed config, unknown step type, …) and `data.warnings` any warnings
 - `409 already_exists` — id already used
 
 #### `PATCH /workflows/{id}`
@@ -291,7 +319,7 @@ Update an existing workflow. All fields optional except `id` (in URL).
 }
 ```
 
-Bumps `connector_version` on every successful update.
+Bumps `connector_version` and `updated_at` on every successful update — so if two enabled workflows share a form, the one you updated last becomes the one that runs. When `config` or `form_id` is supplied, the result is re-validated as for POST.
 
 `managed_by` is IMMUTABLE (cannot change from `admin` to `connector:cowork` or vice versa).
 
@@ -385,18 +413,10 @@ Full run detail including all step results.
 
 Manually replay a run. Useful for failed runs after fixing the underlying issue.
 
-**Request body:**
-```json
-{
-  "from_step": null,
-  "with_modified_context": null
-}
-```
+**No request body.** The route ignores any body: there is no resume-from-step and no context override. A replay is a new run of the same workflow for the same entry, from the first step, using the workflow's CURRENT saved config (`FMW_REST_Runs::replay`).
 
-| Field | Type | Description |
-|---|---|---|
-| `from_step` | string \| null | Step name to resume from. Default: start from step 0. |
-| `with_modified_context` | object \| null | Override context fields for this replay (e.g., manually fix a value that caused failure). |
+- Only runs in `failed`, `cancelled` or `completed` can be replayed; any other status returns `400 cannot_replay`. In practice nothing sets `cancelled` today, and a run stranded in `queued` by the retry defect (see `settings.max_retries`) cannot be replayed.
+- A replay runs even when the workflow is disabled.
 
 **Response:**
 ```json
@@ -412,9 +432,7 @@ Manually replay a run. Useful for failed runs after fixing the underlying issue.
 
 The new run is enqueued via Action Scheduler. It runs async — caller polls `GET /runs/{new_run_id}` for status.
 
-#### `POST /runs/{id}/cancel`
-
-Cancel a queued or running run. v2 feature; v1 returns `not_implemented`.
+There is no cancel route.
 
 ---
 
@@ -462,17 +480,13 @@ Validate a workflow without running it. Useful for AI-generated workflows to ver
 **Request body:**
 ```json
 {
-  "config": "{\"version\":\"1.0\",\"steps\":[...]}",
-  "test_data": {
-    "data": { "email": "test@example.com", "full_name": "Test User", ... },
-    "entry": { "id": 999, "created_at": "2026-05-03" }
-  }
+  "config": "{\"trigger\":{...},\"steps\":[...]}"
 }
 ```
 
-If `config` is provided, validates it. If omitted, validates the existing workflow's saved config.
+If `config` is provided, validates it (the `{id}` is then not looked up). If omitted, validates the saved workflow's config (`404 workflow_not_found` if there is none). Nothing is executed and nothing is interpolated; any other body field is ignored.
 
-If `test_data` is provided, runs each step's interpolation against this synthetic context (without executing external API calls) and returns what the interpolated config would look like.
+**This is a shallower check than create/update.** It runs `FMW_Workflow_Validator::validate()`, not `validate_full()`: it does **not** check that the form exists or that the id is well-formed, and — like create/update — it checks **top-level steps only**, not steps nested in `conditional` or `try_catch`. A workflow that passes `/test` can still be rejected by POST/PATCH, and a nested-step mistake passes both.
 
 **Response:**
 ```json
@@ -480,11 +494,8 @@ If `test_data` is provided, runs each step's interpolation against this syntheti
   "success": true,
   "data": {
     "valid": true,
-    "warnings": ["Step 'create_quote' uses {{ data.tax_doc_url }} which is not in test_data"],
-    "interpolated_steps": [
-      { "name": "customer", "interpolated_config": { ... } },
-      ...
-    ]
+    "errors": [],
+    "warnings": []
   }
 }
 ```
@@ -495,16 +506,17 @@ If `test_data` is provided, runs each step's interpolation against this syntheti
 
 #### `GET /credentials`
 
-List configured credential keys (NEVER returns values).
+List the four supported credential keys (NEVER returns values). `GET /credentials/{key}` returns one of them.
 
 **Response:**
 ```json
 {
   "success": true,
   "data": [
-    { "key": "drive_service_account", "configured": true, "last_updated": "..." },
-    { "key": "printavo_api_token", "configured": true, "last_updated": "..." },
-    { "key": "slack_webhook", "configured": false, "last_updated": null }
+    { "key": "drive_service_account", "configured": true, "testable": true },
+    { "key": "printavo_api_token", "configured": true, "testable": true },
+    { "key": "slack_webhook", "configured": false, "testable": false },
+    { "key": "notification_email", "configured": false, "testable": false }
   ]
 }
 ```
@@ -513,6 +525,8 @@ List configured credential keys (NEVER returns values).
 
 Set a credential. Encrypted at rest.
 
+**This route is the only way to set a credential.** There is no admin screen for credentials and no MCP tool that sets one; call `PUT /wp-json/flowmint/v1/connector/credentials/{key}` directly (App Password Basic Auth), with the connector enabled.
+
 **Request body:**
 ```json
 {
@@ -520,9 +534,13 @@ Set a credential. Encrypted at rest.
 }
 ```
 
-For Drive service account: paste the entire JSON service account key.
-For Printavo: paste the API token string.
-For Slack: paste the webhook URL.
+`value` must be a string:
+- `drive_service_account`: the entire service-account JSON key, as a string.
+- `printavo_api_token`: a JSON string `{"email": "<Printavo login email>", "token": "<API token>"}` — a bare token is rejected when a step runs (`FMW_Printavo_Client::from_credentials`).
+- `slack_webhook`: the incoming-webhook URL (must start with `https://`).
+- `notification_email`: the address failure alerts are emailed to (the site admin email when unset).
+
+Failure alerts go to Slack **or** email, never both: when `slack_webhook` is set, the alert is posted there without waiting for a reply, and if that post fails the alert is lost — no email is sent (`FMW_Failure_Notifier`).
 
 **Response:** `{ "success": true, "data": { "key": "...", "configured": true } }`
 
@@ -534,7 +552,11 @@ Removes a credential. Workflows using it will fail until reconfigured.
 
 #### `POST /credentials/{key}/test`
 
-Tests a credential by making a benign API call to the corresponding service.
+Tests a stored credential. What that means differs by key:
+
+- `printavo_api_token` — makes a real call: queries Printavo for the account and returns its id, name and email.
+- `drive_service_account` — **does not contact Google.** It only checks the stored JSON parses and has a `client_email`, and echoes `client_email` and `project_id` back (`FMW_Drive_Client::test`). A key that Google has revoked, or a folder not shared with the service account, still tests `ok`.
+- `slack_webhook`, `notification_email` — cannot be tested; returns `400 not_testable`.
 
 **Response:**
 ```json
@@ -543,103 +565,89 @@ Tests a credential by making a benign API call to the corresponding service.
   "data": {
     "key": "drive_service_account",
     "test_result": "ok",
-    "details": { "service_account_email": "fmw-prod@project.iam.gserviceaccount.com" }
+    "details": { "service_account_email": "fmw-prod@project.iam.gserviceaccount.com", "project_id": "..." }
   }
 }
 ```
 
-If test fails: `success: false, data.test_result: "failed", data.error: "..."`.
+If the test fails the response is still `success: true`, with `data.test_result: "failed"`, `data.error_code` and `data.error`. An unset credential returns `400 credential_not_configured`.
 
 ---
 
 ## MCP tool surface
 
-The plugin exposes MCP tools that mirror the REST API. Tool names use the `workflow_*` prefix (singular, matches resource name; parallels FormEngine's `formengine_*` pattern).
+The relay (`includes/Connectors/MCP/assets/flowmint-connector.js`) exposes 16 tools, all prefixed `flowmint_`. Each is a thin wrapper over one REST route.
 
 | Tool | REST equivalent | Description |
 |---|---|---|
-| `workflow_preflight` | GET /preflight | Health check |
-| `workflow_list` | GET /workflows | List workflows |
-| `workflow_get` | GET /workflows/{id} | Get one workflow |
-| `workflow_create` | POST /workflows | Create workflow |
-| `workflow_update` | PATCH /workflows/{id} | Update workflow |
-| `workflow_delete` | DELETE /workflows/{id} | Delete workflow |
-| `workflow_test` | POST /workflows/{id}/test | Validate / dry-run |
-| `workflow_get_runs` | GET /runs | List runs |
-| `workflow_get_run` | GET /runs/{id} | Get run detail |
-| `workflow_replay_run` | POST /runs/{id}/replay | Replay run |
-| `workflow_step_types_list` | GET /step-types | List step types |
-| `workflow_step_types_get` | GET /step-types/{type} | Get one step type |
-| `workflow_credentials_list` | GET /credentials | List credentials (no values) |
-| `workflow_credentials_set` | PUT /credentials/{key} | Set credential |
-| `workflow_credentials_test` | POST /credentials/{key}/test | Test credential |
+| `flowmint_preflight` | GET /preflight | Health check |
+| `flowmint_list_workflows` | GET /workflows | List workflows |
+| `flowmint_get_workflow` | GET /workflows/{id} | Get one workflow |
+| `flowmint_create_workflow` | POST /workflows | Create workflow |
+| `flowmint_update_workflow` | PATCH /workflows/{id} | Update workflow |
+| `flowmint_delete_workflow` | DELETE /workflows/{id} | Delete workflow |
+| `flowmint_test_workflow` | POST /workflows/{id}/test | Validate (no execution) |
+| `flowmint_list_runs` | GET /runs | List runs |
+| `flowmint_get_run` | GET /runs/{id} | Get run detail |
+| `flowmint_replay_run` | POST /runs/{id}/replay | Replay run |
+| `flowmint_list_step_types` | GET /step-types | List step types |
+| `flowmint_get_step_type` | GET /step-types/{type} | Get one step type |
+| `flowmint_list_credentials` | GET /credentials | List credentials (no values) |
+| `flowmint_test_credential` | POST /credentials/{key}/test | Test credential |
+| `flowmint_list_templates` | GET /templates | List templates |
+| `flowmint_get_template` | GET /templates/{name} | Get one template |
 
-Each tool's input/output schema is generated from the corresponding REST endpoint's request/response schema.
+There is **no tool to set or delete a credential** or to write a template; those are REST-only (`PUT`/`DELETE /credentials/{key}`, `PUT`/`DELETE /templates/{name}`).
 
 ### Common patterns for AI usage
 
 **Creating a workflow from natural language:**
-1. Claude calls `workflow_step_types_list` to know what's available
+1. Claude calls `flowmint_list_step_types` to know what's available
 2. Claude composes the workflow JSON
-3. Claude calls `workflow_test` (with `config` parameter) to validate before saving
-4. If valid, Claude calls `workflow_create` to persist
+3. Claude checks there is no other enabled workflow for the same form (`flowmint_list_workflows` with `form_id`) — only one runs per form
+4. Claude calls `flowmint_create_workflow` with `enabled: false` (the default), then `flowmint_test_workflow`, then `flowmint_update_workflow` with `enabled: true`
 
 **Debugging a failed run:**
-1. Claude calls `workflow_get_runs` filtered by status=failed
+1. Claude calls `flowmint_list_runs` filtered by status=failed (and status=queued — see the retry defect under `settings.max_retries`)
 2. Picks the most recent
-3. Calls `workflow_get_run` to see step-level detail
+3. Calls `flowmint_get_run` to see step-level detail
 4. Diagnoses (e.g., a step's config_snapshot reveals the issue)
-5. Either: edits the workflow definition (`workflow_update`) and replays, OR: calls `workflow_replay_run` with `with_modified_context` to fix the data
+5. Edits the workflow definition (`flowmint_update_workflow`) and calls `flowmint_replay_run`. A replay cannot change the entry's data or start part-way through.
 
 **Onboarding a new client:**
 1. Breon describes the client's workflow in natural language to Claude
 2. Claude reads `STEP_LIBRARY.md` to know the vocabulary
 3. Claude generates the workflow JSON
-4. Claude validates via `workflow_test`
-5. Claude calls `workflow_create` (with `managed_by: connector:cowork` automatically set)
-6. Done. New client workflow is live.
-
-## Rate limiting
-
-REST endpoints are rate-limited per authenticated user:
-- `GET` operations: 60 requests/minute
-- `POST/PATCH/PUT/DELETE`: 30 requests/minute
-- `POST /workflows/{id}/test`: 10 requests/minute (more expensive)
-
-Exceeded: returns 429 with `Retry-After` header. Same pattern as FormEngine's connector rate limiting.
+4. Claude creates it disabled, validates via `flowmint_test_workflow`, then enables it
+5. Credentials the workflow needs are set by a person through `PUT /credentials/{key}`
 
 ## Error response format
 
-All errors:
+Errors are standard WordPress REST errors (`WP_Error`), with the HTTP status in `data.status`:
 ```json
 {
-  "success": false,
-  "code": "invalid_workflow_id",
-  "message": "Workflow ID must match ^[a-z0-9\\-_]+$",
+  "code": "invalid_workflow",
+  "message": "Workflow validation failed.",
   "data": {
-    "field": "id",
-    "received": "Bulk Order!"
+    "status": 400,
+    "errors": ["Invalid workflow id: must match ^[a-z0-9\\-_]+\\$."],
+    "warnings": []
   }
 }
 ```
 
 Common error codes:
-- `invalid_json` — request body or config not valid JSON
-- `invalid_workflow_id` — id format invalid
+- `invalid_json` — request body or config not valid JSON, or config sent as an object
+- `invalid_workflow` — create/update validation failed; see `data.errors`
+- `already_exists` — workflow id already used (409)
 - `workflow_not_found` — id doesn't exist
-- `form_not_found` — form_id doesn't exist in FormEngine
-- `invalid_config` — workflow JSON doesn't match schema
-- `invalid_step_type` — references unknown step type
-- `invalid_step_config` — step config doesn't match step's schema
-- `step_not_found` — step name not in workflow
 - `run_not_found` — run id doesn't exist
-- `cannot_replay` — run cannot be replayed (e.g., still queued)
+- `cannot_replay` — run is not failed, cancelled or completed
+- `unknown_credential_key` — not one of the four supported keys
 - `credential_not_configured` — required credential missing
-- `credential_invalid` — credential failed test
-- `rate_limit_exceeded` — too many requests
-- `permission_denied` — caller lacks required capability
-- `dependency_missing` — FormEngine not active or wrong version
+- `not_testable` — credential has no test
+- `connector_disabled` — the connector is switched off (403)
+- `permission_denied` — caller lacks `flowmint_manage_workflows`
+- `dependency_missing` — a required library or plugin is not loaded
 
-## OpenAPI spec
-
-Full OpenAPI 3.0 spec lives at `/wp-json/flowmint/v1/connector/openapi.json` (Phase 5 deliverable). Until then, this doc is the spec.
+There is no rate limiting on these routes.
