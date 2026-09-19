@@ -61,6 +61,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   checks: retry and resume, default fail and alert, retries exhausted,
   edited workflow, the migration) and with Action Scheduler itself firing
   the retry.
+- **Conditions that did not depend on the data now evaluate as written.**
+  Three expression shapes gave a constant answer (FLOWMINT_AUDIT.md I-NEW,
+  and the pressure test of 2026-09-19):
+  - a function call sharing its `{{ }}` with an operator was read as a path
+    and never ran — `{{ !has_file(entry, 'photo') }}` was always true,
+    `{{ length(data.notes) > 100 }}` never measured anything. The tokenizer
+    now resolves `name(…)` as a call (nested calls and quoted arguments
+    included);
+  - a call inside an expression wrapped from its first `{{` to its last `}}`
+    never ran (the outer braces are now stripped only for a single block);
+  - a block that compares or negates inside a larger expression resolved to
+    empty; it is now evaluated as a condition. A block of only `||` stays a
+    value ("first non-empty"), as before.
+  A live workflow may have relied on the constant answer, so
+  `FMW_Expression::legacy_result_differs()` recognises exactly the shapes
+  whose result can change — checked against the 0.9.0 parser on sample data,
+  with no changed expression unflagged — and the **Workflows** screen lists
+  every saved `skip_if` / conditional `if` in one of them, nested steps
+  included, until dismissed. The documented workarounds (operator outside
+  the braces, blocks in parentheses) still work. `ExpressionTest` gains six
+  tests and `test_length_used_in_comparison` is no longer skipped.
 
 Found writing the user documentation (2026-09-19), each checked in the code:
 

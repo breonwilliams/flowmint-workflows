@@ -76,6 +76,8 @@ class FMW_Admin {
         echo '<h1>' . esc_html__( 'Workflows', 'flowmint-workflows' ) . '</h1>';
         echo '<p>' . esc_html__( 'Workflows are created via the REST API or MCP. This page is read-only — for debugging.', 'flowmint-workflows' ) . '</p>';
 
+        $this->changed_conditions_notice( $list['items'] );
+
         if ( empty( $list['items'] ) ) {
             echo '<p>' . esc_html__( 'No workflows registered yet.', 'flowmint-workflows' ) . '</p>';
             echo '</div>';
@@ -98,6 +100,60 @@ class FMW_Admin {
         }
         echo '</tbody></table>';
         echo '</div>';
+    }
+
+    /**
+     * List the conditions whose result changed in 0.10.0, so the owner can
+     * check the workflows that contain them.
+     *
+     * Before 0.10.0 three expression shapes gave a result that did not
+     * depend on the data — a function call beside an operator inside one
+     * {{ }} never ran, for instance, so {{ !has_file(entry, 'photo') }} was
+     * always true (FMW_Expression::legacy_result_differs()). They are now
+     * evaluated as written, which is what their author meant, but a live
+     * workflow may have been relying on the constant answer. Shown until
+     * dismissed; a different set of conditions shows again.
+     *
+     * @param array $rows Workflow rows.
+     */
+    private function changed_conditions_notice( array $rows ) {
+        $found = [];
+        foreach ( $rows as $row ) {
+            $config = json_decode( (string) ( $row['config'] ?? '' ), true );
+            if ( ! is_array( $config ) ) {
+                continue;
+            }
+            foreach ( FMW_Expression::changed_conditions( $config ) as $hit ) {
+                $found[] = array_merge( [ 'workflow' => (string) $row['id'], 'title' => (string) $row['title'] ], $hit );
+            }
+        }
+        if ( ! $found ) {
+            return;
+        }
+
+        $hash = md5( (string) wp_json_encode( $found ) );
+        if ( isset( $_GET['fmw_dismiss_conditions'] )
+            && wp_verify_nonce( sanitize_key( wp_unslash( $_GET['_wpnonce'] ?? '' ) ), 'fmw_dismiss_conditions' ) ) {
+            update_option( 'fmw_conditions_review_dismissed', $hash, false );
+        }
+        if ( get_option( 'fmw_conditions_review_dismissed' ) === $hash ) {
+            return;
+        }
+
+        echo '<div class="notice notice-warning"><p><strong>' . esc_html__( 'Check these conditions.', 'flowmint-workflows' ) . '</strong> ';
+        echo esc_html__( 'Before version 0.10.0 they gave the same answer whatever the submission contained — for example a function call next to ! or a comparison inside one {{ }} never ran. They now work as written, so these workflows may take a different path than before.', 'flowmint-workflows' );
+        echo '</p><ul style="list-style:disc;margin-left:2em">';
+        foreach ( $found as $hit ) {
+            printf(
+                '<li>%s — %s, <code>%s</code>: <code>%s</code></li>',
+                esc_html( '' !== $hit['title'] ? $hit['title'] : $hit['workflow'] ),
+                esc_html( $hit['step'] ),
+                esc_html( $hit['field'] ),
+                esc_html( $hit['expression'] )
+            );
+        }
+        $dismiss = wp_nonce_url( admin_url( 'admin.php?page=fmw-workflows&fmw_dismiss_conditions=1' ), 'fmw_dismiss_conditions' );
+        echo '</ul><p><a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'I have checked them — dismiss', 'flowmint-workflows' ) . '</a></p></div>';
     }
 
     /**

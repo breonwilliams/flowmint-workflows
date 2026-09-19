@@ -252,9 +252,9 @@ In a conditional expression:
 "{{ length(data.notes) }} > 100"  → length() returns int, > does numeric compare
 ```
 
-A function call must sit alone in its `{{ }}` with the operator outside:
-`"{{ length(data.notes) > 100 }}"` never calls `length()` — the parser reads
-the name as a missing path. See CONNECTOR_API.md, "Expressions".
+`"{{ length(data.notes) > 100 }}"` works too (since 0.10.0 — before, a call
+next to an operator inside one `{{ }}` was never made). See CONNECTOR_API.md,
+"Expressions".
 
 ### Array fields
 

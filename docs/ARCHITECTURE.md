@@ -440,7 +440,7 @@ Workflow configs use `{{ ... }}` for variable substitution. Resolved at step exe
 - Comparisons: `==`, `!=`, `>`, `<`, `>=`, `<=`
 - Logical: `&&`, `||`, `!`
 - Functions: `has_file(entry, '<field_key>')`, `is_empty(<value>)`, `length(<value>)`, `contains(<haystack>, <needle>)`
-- A function call must sit alone in its `{{ }}` with operators outside: `!{{ has_file(entry, 'x') }}`, `{{ length(data.notes) }} > 100`. Inside a shared `{{ }}` the call is never made (see CONNECTOR_API.md, "Expressions").
+- Calls, paths, literals and operators combine freely: `{{ length(data.notes) > 100 && !is_empty(data.full_name) }}`, `{{ has_file(entry, 'x') }} && {{ data.rush == 'yes' }}`. Before 0.10.0 a call beside an operator inside one `{{ }}` was never made (see CONNECTOR_API.md, "Expressions").
 
 Expressions are parsed by a custom small expression evaluator. NO eval, NO arbitrary PHP execution. The evaluator is documented in `STEP_LIBRARY.md` under the `conditional` step.
 

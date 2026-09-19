@@ -142,21 +142,26 @@ For a select, radio or checkbox, `data.*` is the stored option value
 
 ```json
 { "if": "{{ data.service == 'pothole' || data.service == 'streetlight' }}" }
-{ "skip_if": "!{{ has_file(entry, 'photo') }}" }
-{ "if": "{{ length(data.notes) }} > 100" }
-{ "if": "({{ has_file(entry, 'photo') }}) && ({{ is_empty(data.notes) }})" }
+{ "skip_if": "{{ !has_file(entry, 'photo') }}" }
+{ "if": "{{ length(data.notes) > 100 && !is_empty(data.full_name) }}" }
+{ "if": "{{ has_file(entry, 'photo') }} && {{ data.rush == 'yes' }}" }
 ```
 
-**A function call must sit alone in its `{{ }}`, with any operator
-outside the braces.** When a call shares one `{{ }}` with `!`, `&&`, `||`
-or a comparison, the call is never made — its name is read as a missing
-path — so `{{ !has_file(entry, 'photo') }}` is always true and
-`{{ length(data.notes) > 100 }}` never measures the notes (`FMW_Expression::evaluate`
-and its tokenizer). Paths and literals may share one `{{ }}` with
-operators, as in the first example. When an expression holds more than
-one `{{ }}`, keep every operator outside the braces and wrap each block in
-parentheses: an expression that begins with `{{` and ends with `}}` is
-otherwise read as a single block, and the calls inside it are not made.
+Function calls, paths and literals can be combined freely inside one `{{ }}`
+or across several; each block that compares or negates is evaluated as a
+condition of its own. A block of only `||` is a VALUE — the first non-empty
+operand — so `{{ data.nickname || data.name }} == 'Pat'` compares a name.
+
+**Before 0.10.0** three shapes gave an answer that did not depend on the data:
+a call sharing its `{{ }}` with an operator was never made
+(`{{ !has_file(entry, 'photo') }}` was always true); a call inside an
+expression wrapped from its first `{{` to its last `}}` was never made; and
+a comparing block inside a larger expression came back empty. The
+workarounds that were documented then — the operator outside the braces,
+each block in parentheses — still work. After updating, the **Workflows**
+screen lists any saved condition in one of those shapes
+(`FMW_Expression::legacy_result_differs`), because it now evaluates as
+written and may take a different path.
 
 ### Nested steps
 
