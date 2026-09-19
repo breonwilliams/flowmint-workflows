@@ -4,11 +4,11 @@ Tags: workflow, automation, form submissions, async, action scheduler
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.9.0
+Stable tag: 0.10.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Async workflow runtime that turns Form Runtime Engine submissions into multi-step pipelines (Drive uploads, Printavo Quote creation, customer ack emails, conditional branches) without an external orchestrator.
+Turns Promptless Forms submissions and schedules into multi-step workflows: email, HTTP, Google Drive, Printavo and conditions, run in the background.
 
 == Description ==
 
@@ -57,6 +57,12 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 
 == Changelog ==
 
+= 0.10.0 =
+* Added: HTTP steps can authenticate with a stored credential (auth: { credential, scheme }) instead of a token written into the workflow.
+* Changed: requires PHP 8.1. Deleting the plugin keeps workflows, runs and credentials unless FMW_REMOVE_ALL_DATA is set.
+* Fixed: retries now run, on steps set to on_error "retry", and resume at the failed step; runs left waiting by earlier versions are marked failed so they can be replayed.
+* Fixed: conditions mixing function calls with operators evaluate as written; try_catch steps see earlier values; workflow and form titles are filled in.
+
 = 0.9.0 =
 * Added: the ingest step `pre_upsert_records` maps a photo URL per record (`featured_image_url`). Post Runtime downloads each image once, reuses it on every later run and sets it as the record's featured image; a URL that fails is a per-record warning, not a failure. Requires Post Runtime Engine 0.10.0 or newer for the image.
 
@@ -75,16 +81,14 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 = 0.6.8 =
 * Improved: the "Copy Command" button on the Connector setup screen now sits below the command block instead of overlaying it, fixing a tap-target overlap and a color-contrast issue.
 
-= 0.6.7 =
-* Internal: developer/AI reference documentation (AGENTS.md) is now maintained in the repository. No functional changes.
-
-
-
 WordPress truncates this section at 5,000 characters, so it keeps a rolling window of the
 six most recent releases. The complete history lives in CHANGELOG.md in the plugin folder,
 and on the GitHub releases page.
 
 == Upgrade Notice ==
+
+= 0.10.0 =
+Requires PHP 8.1. Retries now actually run (for steps set to on_error "retry") and resume where they failed; runs stranded by earlier versions are marked failed for replay. Adds stored credentials for HTTP steps.
 
 = 0.9.0 =
 Imports can map a photo URL per record; Post Runtime downloads each image once and sets it as the featured image (needs Post Runtime Engine 0.10.0+). Existing workflows are unaffected.
@@ -101,6 +105,3 @@ Adds a `labels` namespace so workflow emails use the option text a visitor chose
 = 0.6.5 =
 Adds failure notifications: when a workflow run permanently fails, FlowMint now alerts you via Slack (slack_webhook credential) or email (notification_email credential / admin email) with a link to inspect and replay the run. No schema or workflow changes; safe update from any 0.6.x.
 
-
-= 0.6.1 =
-Connector admin page UI polish — renamed to vendor-neutral "Connector" / "The FlowMint Connector" naming, new card-based layout with clearer 3-step setup flow. No behavior changes.
