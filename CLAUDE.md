@@ -36,7 +36,7 @@ A WordPress plugin that turns FormEngine submissions into multi-step workflows �
 | Requirement | Version | Notes |
 |-------------|---------|-------|
 | WordPress | 5.6+ | Application Passwords API (connector) requires 5.6; `wp_timezone()` (scheduled triggers) requires 5.3 — raised from 5.0 per Plugin Check, 2026-07-11 |
-| PHP | 7.4+ | Type hints, arrow functions, null coalescing |
+| PHP | 8.1+ | Raised from 7.4 on 2026-09-19: the bundled `google/apiclient` 2.19 and `google/auth` 1.50 require ^8.1 (`firebase/php-jwt` 7 requires ^8.0), and no `google/apiclient` without security advisories installs on 7.4. `composer.json` pins `config.platform.php` to 8.1.0 so a build on a newer PHP cannot pull dependencies that need more |
 | MySQL | 5.6+ / MariaDB 10.0+ | InnoDB required (transactional integrity for run history) |
 | Form Runtime Engine (Promptless Forms) | 1.8.0+ (`FMW_REQUIRED_FRE_VERSION`) | Hard dependency — admin notice if missing. 1.8.0 minimum because that release renamed FRE's PHP surface to `pforms_*`/`PForms_*` |
 | Action Scheduler | bundled | Used for async job processing; bundled in vendor/ |

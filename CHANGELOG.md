@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **Requires PHP 8.1** (was 7.4). The release ZIP already bundled
+  `google/apiclient` 2.19.2 and `google/auth` 1.50.1, which require PHP
+  ^8.1, and `firebase/php-jwt` 7.0.5 (^8.0); with `platform-check` off,
+  nothing warned a 7.4 or 8.0 site that the Drive steps' library could not
+  run there. On 7.4 no `google/apiclient` without security advisories
+  installs at all (found by the first CI run, #9). The header and
+  `readme.txt` now say 8.1, so WordPress refuses to install or update onto
+  an older PHP instead of failing at run time, and `composer.json` pins
+  `config.platform.php` to 8.1.0 so a build on a newer PHP can never bundle
+  a dependency that needs more. CI lints on 8.1 and 8.2.
+
 ### Fixed
 
 Found writing the user documentation (2026-09-19), each checked in the code:

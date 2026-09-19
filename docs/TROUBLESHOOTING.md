@@ -186,8 +186,10 @@ has PHP 8.0, the plugin fatals.
 }
 ```
 
-This produces a no-op `platform_check.php`. Plugin loads on any PHP 7.4+
-host regardless of build host's PHP version.
+This produces a no-op `platform_check.php`, so the build host's PHP version
+doesn't matter. The floor is the plugin's `Requires PHP` (8.1), which
+WordPress enforces on install and update; `config.platform.php` in
+`composer.json` keeps every bundled dependency resolvable on that floor.
 
 ### Action Scheduler must be `require_once`'d, not just Composer-autoloaded
 
