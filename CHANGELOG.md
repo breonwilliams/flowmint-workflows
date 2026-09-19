@@ -199,6 +199,12 @@ four connectors on Local).
   and the interpolator's header no longer lists `| filter` syntax it never
   had.
 
+### Fixed — found in the release check (2026-09-19)
+
+- **Plugin Check reported three errors on the release build.** The new
+  credential messages carried the step's `auth` values unescaped; they are
+  escaped now, and two table-name queries carry the reason they are safe.
+
 ## [0.9.0] - 2026-09-14
 
 ### Added

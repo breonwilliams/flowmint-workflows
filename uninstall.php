@@ -93,7 +93,7 @@ function fmw_uninstall_cleanup() {
     }
 
     foreach ( [ 'fmw_workflow_run_steps', 'fmw_workflow_runs', 'fmw_workflows' ] as $table ) {
-        $wpdb->query( "DROP TABLE IF EXISTS `{$wpdb->prefix}{$table}`" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- names are fixed.
+        $wpdb->query( "DROP TABLE IF EXISTS `{$wpdb->prefix}{$table}`" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, PluginCheck.Security.DirectDB.UnescapedDBParameter -- names are fixed.
     }
 
     // Every FlowMint option: credentials (and the nonce their encryption
