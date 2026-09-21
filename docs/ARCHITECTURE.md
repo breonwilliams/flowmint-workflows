@@ -662,6 +662,11 @@ FlowMint Workflows uses these FormEngine APIs and ONLY these:
 - `fmw_step_config($config, $step, $context)` — modify a step's interpolated config before execution
 - `fmw_step_output($output, $step, $context)` — modify a step's output before it's written to context
 - `fmw_credential($credential, $key)` — intercept credential lookup (useful for testing)
+- `fmw_retry_delay_seconds($delay, $attempt, $run_id)` — delay before a retry (default 60 / 300 / 900)
+- `fmw_drive_http_client($client)` *(0.11.0)* — a Guzzle client for every Drive request, the token request included. Lets a workflow run end to end against a stand-in for the Drive API; never used in production
+- `fmw_drive_upload_chunk_size($bytes)` *(0.11.0)* — resumable-upload chunk size, default 8 MB, rounded to a 256 KB multiple
+- `fmw_run_time_limit($seconds)` *(0.11.0)* — PHP time limit asked for each run, default 300
+- `fmw_interrupted_run_after_seconds($seconds)` *(0.11.0)* — how long a run may sit on Running before the hourly sweep treats it as interrupted, default 1800
 
 The integration is intentionally one-way: FormEngine never knows about FlowMint Workflows. The plugin can be deactivated and FE works fine. See `INTEGRATION_FRE.md` for the full contract.
 

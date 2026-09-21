@@ -172,6 +172,34 @@ is final at once: **Failed**, alerted, replayable.
   a notice on Run History gives the count. Replay the ones that still
   matter.
 
+### Put `"on_error": "retry"` on every Drive, Printavo and HTTP step
+
+A step without it fails the run on the first Drive 503 or timeout, and a
+failed run stops there: every later step is skipped, including the email
+that tells the shop a quote arrived. Measured on a copy of 725 Print Lab's
+quote workflow (2026-09-21): one Drive 503 on the artwork upload, without
+`retry`, left a Failed run and no shop email; with `retry` the run resumed
+at the upload a minute later and finished. Leave `send_email` steps and
+`log_*` steps on the default; for a customer acknowledgement use
+`"on_error": "continue"` so a bad customer address never blocks the rest.
+
+### A run stuck on "Running" (interrupted runs)
+
+If the server ends the request mid-step (PHP time limit, fatal error,
+memory limit) the run's own error handling never runs. Before 0.11.0 such a
+run stayed **Running** for good, with no alert, no retry and none of the
+later steps. Since 0.11.0 FlowMint hears Action Scheduler report the dead
+action and handles the run as an `interrupted` failure at the step it was
+on: retried if that step has `"on_error": "retry"`, otherwise marked
+**Failed** and alerted. An hourly `fmw_sweep_interrupted_runs` action
+catches any run still **Running** after 30 minutes (filter
+`fmw_interrupted_run_after_seconds`); the cut-off is in the site's own
+time zone, like `started_at`.
+
+Each run also asks PHP for 300 seconds (`set_time_limit`, filter
+`fmw_run_time_limit`) so a large upload is not cut off by a 30-second host
+default. Hosts that forbid `set_time_limit` still get the recovery above.
+
 ### Composer's `platform_check.php` can lock the plugin to one PHP version
 
 Composer's autoloader generates a `vendor/composer/platform_check.php`
