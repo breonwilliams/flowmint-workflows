@@ -93,6 +93,11 @@ class FMW_Submission_Listener {
                 'Action Scheduler returned 0 from as_enqueue_async_action — the workflow could not be enqueued for async execution. This is rare; check the Action Scheduler log for context.'
             );
 
+            // Fire the failure alert too. Until 0.11.0 this was the one
+            // failure nobody was told about: the run showed failed in Run
+            // History and nothing else happened.
+            do_action( 'fmw_workflow_run_failed', $run_id, $workflow->id(), (int) $entry_id, 'enqueue_failed', 'The workflow could not be queued to run.' );
+
             FMW_Logger::error( 'Workflow enqueue failed', [
                 'run_id'      => $run_id,
                 'workflow_id' => $workflow->id(),

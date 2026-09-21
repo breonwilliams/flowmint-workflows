@@ -61,6 +61,25 @@ class FMW_Drive_Client {
         $client->addScope( \Google\Service\Drive::DRIVE );
         $client->setApplicationName( 'FlowMint Workflows' );
 
+        /**
+         * Filter the HTTP client the Drive client sends through.
+         *
+         * Return a GuzzleHttp\ClientInterface to replace the Google library's
+         * default one — a test double that stands in for the Drive API, or a
+         * client with a proxy or different timeouts. Return null (the default)
+         * to leave it unchanged. The same client carries the service-account
+         * token request.
+         *
+         * @since 0.11.0
+         *
+         * @param \GuzzleHttp\ClientInterface|null $http   Replacement client, or null.
+         * @param array                             $config Decoded service-account JSON.
+         */
+        $http = apply_filters( 'fmw_drive_http_client', null, $config );
+        if ( $http instanceof \GuzzleHttp\ClientInterface ) {
+            $client->setHttpClient( $http );
+        }
+
         $this->service = new \Google\Service\Drive( $client );
     }
 
@@ -328,7 +347,19 @@ class FMW_Drive_Client {
             'supportsAllDrives' => true,
         ] );
 
-        $chunk_size = 1 * 1024 * 1024; // 1MB chunks
+        // 8 MB chunks (a multiple of Google's required 256 KB). At 1 MB a
+        // 25 MB artwork file took 26 round trips to Google, each one time
+        // against the host's PHP limit; 8 MB takes 4 and costs ~8 MB of
+        // memory per chunk.
+        /**
+         * Resumable upload chunk size in bytes. Must be a multiple of 262144.
+         *
+         * @since 0.11.0
+         *
+         * @param int $bytes Default 8388608 (8 MB).
+         */
+        $chunk_size = (int) apply_filters( 'fmw_drive_upload_chunk_size', 8 * 1024 * 1024 );
+        $chunk_size = max( 262144, $chunk_size - ( $chunk_size % 262144 ) );
 
         $media = new \Google\Http\MediaFileUpload(
             $client,
