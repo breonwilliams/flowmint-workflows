@@ -4,7 +4,7 @@ Tags: workflow, automation, form submissions, async, action scheduler
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.10.0
+Stable tag: 0.11.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,12 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 
 == Changelog ==
 
+= 0.11.0 =
+* Fixed: a run the server cut off part-way (time limit, fatal error, memory) stayed "running" forever, with no retry, no alert and none of the later steps. It is now recovered: retried from that step if it is set to on_error "retry", otherwise marked failed and alerted.
+* Changed: each run asks for up to five minutes of PHP time, and Google Drive uploads go in 8 MB parts instead of 1 MB.
+* Fixed: a run that could not be queued now sends the failure alert.
+* Added: filters for the run time limit, the interrupted-run cut-off, the Drive chunk size and the Drive HTTP client (for testing without Google).
+
 = 0.10.0 =
 * Added: HTTP steps can authenticate with a stored credential (auth: { credential, scheme }) instead of a token written into the workflow.
 * Changed: requires PHP 8.1. Deleting the plugin keeps workflows, runs and credentials unless FMW_REMOVE_ALL_DATA is set.
@@ -78,14 +84,14 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 * Fixed: uploaded-file details in workflows are now documented as they actually behave — keyed by field name, with no file URL, and a shape that changes when more than one file is attached. Each of those failed silently before, producing a workflow that reported success while sending nothing.
 * Fixed: the connector could not reach an HTTPS local development site.
 
-= 0.6.8 =
-* Improved: the "Copy Command" button on the Connector setup screen now sits below the command block instead of overlaying it, fixing a tap-target overlap and a color-contrast issue.
-
 WordPress truncates this section at 5,000 characters, so it keeps a rolling window of the
 six most recent releases. The complete history lives in CHANGELOG.md in the plugin folder,
 and on the GitHub releases page.
 
 == Upgrade Notice ==
+
+= 0.11.0 =
+Runs cut off by the server no longer stay "running" forever: they are retried or marked failed and alerted. Large Drive uploads get more time. Existing workflows are unaffected.
 
 = 0.10.0 =
 Requires PHP 8.1. Retries now actually run (for steps set to on_error "retry") and resume where they failed; runs stranded by earlier versions are marked failed for replay. Adds stored credentials for HTTP steps.
@@ -101,7 +107,3 @@ Adds the Post Runtime ingest step (`pre_upsert_records`) for scheduled, duplicat
 
 = 0.7.0 =
 Adds a `labels` namespace so workflow emails use the option text a visitor chose rather than the stored value. Corrects the documented shape of uploaded-file data, which was wrong in three ways that all failed silently. Additive; existing workflows are unaffected.
-
-= 0.6.5 =
-Adds failure notifications: when a workflow run permanently fails, FlowMint now alerts you via Slack (slack_webhook credential) or email (notification_email credential / admin email) with a link to inspect and replay the run. No schema or workflow changes; safe update from any 0.6.x.
-
