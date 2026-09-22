@@ -6,6 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-21
+
+Found testing 725 Print Lab's two quote workflows end to end on a local
+mirror (Drive simulated through the new filter). PR #18.
+
+### Added
+
+- `fmw_drive_http_client` filter: the HTTP client every Drive request, the
+  service-account token included, is sent through. Makes a workflow testable
+  end to end without Google.
+- Filters `fmw_run_time_limit` (300), `fmw_interrupted_run_after_seconds`
+  (1800) and `fmw_drive_upload_chunk_size` (8 MB, rounded to 256 KB).
+- Hourly `fmw_sweep_interrupted_runs` action (group `fmw`).
+
+### Changed
+
+- Each run asks for 300 seconds of PHP time where the host allows it.
+- Resumable Drive uploads use 8 MB chunks instead of 1 MB: 4 round trips for
+  a 25 MB file, not 26.
+
+### Fixed
+
+- **A run cut off by a PHP time limit, fatal error or memory limit stayed
+  "running" forever**: no retry, no alert, none of the later steps. For 725
+  that meant no quote email to the shop, and with Promptless Forms' own
+  notification off on their forms nobody would know. Reproduced with a 21 MB
+  upload and a 30-second limit. Action Scheduler's
+  `action_scheduler_unexpected_shutdown` / `action_scheduler_failed_execution`
+  hand the run to `FMW_Workflow_Job::recover_interrupted()`, and the sweep
+  catches one killed outright. The step that was running is read from the
+  checkpoint: with `on_error: "retry"` the run resumes there, otherwise it
+  fails as `interrupted` and alerts. The sweep's cut-off is in site-local
+  time, like `started_at`.
+- A run that could not be queued (`enqueue_failed`) now fires
+  `fmw_workflow_run_failed` and alerts.
+
+No change to the workflow JSON format or to stored workflows; no schema change.
+
 ## [0.10.0] - 2026-09-19
 
 ### Added
