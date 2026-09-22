@@ -13,7 +13,7 @@ If FormEngine is deactivated:
 
 If FlowMint Workflows is deactivated:
 - FormEngine continues operating as if FMW never existed
-- Form submissions still produce entries, send notifications, fire `fre_submission_complete`
+- Form submissions still produce entries, send notifications, fire `pforms_submission_complete`
 - The action just has no listener
 
 ## What FlowMint Workflows reads from FormEngine
@@ -22,25 +22,29 @@ If FlowMint Workflows is deactivated:
 
 | Hook | Signature | Purpose |
 |---|---|---|
-| `fre_submission_complete` | `($entry_id, $form_id, $sanitized_data)` | Primary trigger. FMW enqueues a workflow run if the form has a workflow registered. |
-| `fre_entry_created` | `($entry_id, $form_id, $data)` | NOT used in v1. FMW prefers `fre_submission_complete` because it fires AFTER files are attached. |
+| `pforms_submission_complete` | `($entry_id, $form_id, $sanitized_data)` | Primary trigger. FMW enqueues a workflow run if the form has a workflow registered. |
+| `pforms_entry_created` | `($entry_id, $form_id, $data)` | NOT used. FMW prefers `pforms_submission_complete` because it fires AFTER files are attached. |
 
-FMW listens to `fre_submission_complete` because that hook fires AFTER:
+FormEngine 1.8.0 renamed its PHP surface from `fre_*` to `pforms_*` with no aliases: a listener on the old `fre_submission_complete` name never fires. The `fre_*` **step type** names in FlowMint (`fre_get_entry`, `fre_delete_entry`…) are FlowMint's own vocabulary, stored in client workflow JSON, and are deliberately unchanged.
+
+FMW listens to `pforms_submission_complete` because that hook fires AFTER:
 1. Entry is stored
 2. Files are uploaded and attached to the entry
 3. Conditional fields are stripped (FMW gets the clean payload)
-4. ...but BEFORE the FE notification email sends and BEFORE the FE webhook dispatches
+4. ...but BEFORE the FE notification email sends (FE's webhook dispatcher listens on the same hook)
 
-This ordering means workflows have access to fully-attached file data via FRE_Entry but can complete asynchronously without delaying the user's form submission response.
+It does NOT fire for a submission FormEngine 1.11.0+ keeps as spam (a filled honeypot): that entry is stored with `is_spam=1` and nothing downstream runs. Marking it **Not Spam** later does not start a workflow either.
+
+This ordering means workflows have access to fully-attached file data via PForms_Entry but can complete asynchronously without delaying the user's form submission response.
 
 ### Classes (FormEngine exposes, FlowMint Workflows calls)
 
 | Class / function | Used for |
 |---|---|
-| `FRE_Entry` | Loading entry data, file attachments by entry ID |
-| `fre()->registry->get($form_id)` | Verifying a form_id exists when a workflow is created/updated |
-| `fre()->registry->exists($form_id)` | Quick existence check |
-| `FRE_Logger::info()` / `::warning()` / `::error()` | (Optional) unified logging across both plugins |
+| `PForms_Entry` | Loading entry data and file attachments by entry ID; `update_status()` and `delete()` for the entry steps |
+| `PForms_Entry_Query` | Listing entries for `fre_list_entries` |
+| `pforms()->registry->get($form_id)` | Verifying a form_id exists when a workflow is created/updated |
+| `pforms()->registry->exists($form_id)` | Quick existence check |
 
 These are the ONLY FormEngine APIs FlowMint Workflows is allowed to call directly. Anything else is implementation detail that may change without notice in FormEngine releases.
 
@@ -56,13 +60,11 @@ This is intentional: REST calls between plugins on the same WP install would be 
 
 FlowMint Workflows includes a step type that calls FormEngine's existing entry deletion logic. This is the only state-modifying touch point.
 
-Implementation: the step calls FormEngine's REST connector endpoint `DELETE /wp-json/fre/v1/connector/entries/{id}` from PHP via `wp_remote_request()` with the WP App Password configured in FMW credentials. NOT a direct database delete (which would skip FE's cascade cleanup of files).
-
-Future v2: this could be optimized to a direct PHP call to FRE_Entry::delete() when both plugins are on the same install. For v1, the REST round-trip is fine.
+Implementation: the step calls `PForms_Entry::delete()` directly (same install, no HTTP), which runs FormEngine's own cascade cleanup of the entry's meta and files. NOT a raw database delete.
 
 ### Via the `fre_update_entry_status` step type
 
-Updates entry status (unread/read/spam) via FormEngine's REST endpoint.
+Updates entry status (unread/read/spam) via `PForms_Entry::update_status()`.
 
 ## Hooks FlowMint Workflows offers (other plugins / themes can listen)
 
@@ -109,7 +111,7 @@ When FormEngine releases a new version, FlowMint Workflows is tested against it 
 |---|---|
 | Form definitions (DB row in `wp_fre_forms`) | FormEngine |
 | Form entries (`wp_fre_entries`) | FormEngine |
-| Uploaded files (`wp-content/uploads/fre-uploads/`) | FormEngine |
+| Uploaded files (Media Library attachments in `wp-content/uploads/YYYY/MM/`, linked from `wp_fre_entry_files`) | FormEngine |
 | Workflow definitions (`wp_fmw_workflows`) | FlowMint Workflows |
 | Workflow runs (`wp_fmw_workflow_runs`) | FlowMint Workflows |
 | Workflow run steps (`wp_fmw_workflow_run_steps`) | FlowMint Workflows |
@@ -130,7 +132,7 @@ wp-content/plugins/
 ├── ai-section-builder-modern/  ← Promptless WP (optional, for full stack)
 ```
 
-Both plugins active simultaneously. FMW's `fre_submission_complete` listener fires automatically. The local environment provides the full integration test surface without needing production deploys.
+Both plugins active simultaneously. FMW's `pforms_submission_complete` listener fires automatically. The local environment provides the full integration test surface without needing production deploys.
 
 For the development cycle:
 1. Make changes in FMW source
@@ -142,7 +144,7 @@ For the development cycle:
 ## Coupling boundaries
 
 What's tightly coupled (intentional):
-- FMW listens to `fre_submission_complete` → must match FRE's signature exactly
+- FMW listens to `pforms_submission_complete` → must match FRE's signature exactly
 - FMW reads via `FRE_Entry` → must match FRE's class API
 - FMW calls FRE's REST endpoint for entry deletion → must match FRE's REST contract
 

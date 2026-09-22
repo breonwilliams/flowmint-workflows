@@ -527,9 +527,10 @@ Uploads a FE entry file to a Drive folder.
 ```
 
 Behavior:
-- Uses chunked upload for files >5MB
-- Verifies upload integrity via MD5 hash comparison
-- After successful upload, the local file in `wp-content/uploads/fre-uploads/` IS NOT deleted by this step — that's the responsibility of `fre_delete_entry` later in the workflow OR an explicit cleanup step
+- Files over 5 MB go up as a resumable upload in 8 MB chunks (0.11.0+; 1 MB before, which took over 20 requests for a 21 MB file). Filter `fmw_drive_upload_chunk_size`, rounded to Google's 256 KB multiple. Smaller files go up in one request
+- No checksum comparison is made after upload; Drive's own response is taken as success
+- Set `"on_error": "retry"` on this step: a Drive 5xx or timeout then retries from this step instead of failing the run, which otherwise also skips every later step (including the shop's notification email)
+- After successful upload, the local file (a FormEngine Media Library attachment) IS NOT deleted by this step — that's the responsibility of `fre_delete_entry` later in the workflow OR an explicit cleanup step
 
 If the file field has no file (`{{ steps.fre_get_file.exists == false }}`), the step skips with output `{ "skipped": true, "reason": "no_file" }`. Use `skip_if` if you want stricter handling.
 
