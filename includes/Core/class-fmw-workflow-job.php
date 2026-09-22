@@ -27,6 +27,137 @@ class FMW_Workflow_Job {
      */
     public static function register() {
         add_action( 'fmw_run_workflow', [ __CLASS__, 'handle' ], 10, 1 );
+
+        // A run the server killed part-way — PHP's time limit, a fatal error,
+        // memory — never reaches the catch blocks in handle(), so until 0.11.0
+        // it stayed "running" for good: no retry, no failure alert, and none
+        // of the steps after the one that was cut off (for 725 Print Lab: no
+        // quote email to the shop). Action Scheduler reports such deaths; the
+        // hourly sweep catches the ones it cannot (a process killed outright).
+        add_action( 'action_scheduler_unexpected_shutdown', [ __CLASS__, 'on_action_died' ], 10, 1 );
+        add_action( 'action_scheduler_failed_execution', [ __CLASS__, 'on_action_died' ], 10, 1 );
+        add_action( self::SWEEP_HOOK, [ __CLASS__, 'sweep_interrupted_runs' ] );
+        add_action( 'action_scheduler_init', [ __CLASS__, 'schedule_sweep' ] );
+    }
+
+    /**
+     * Hook of the hourly sweep for interrupted runs.
+     */
+    const SWEEP_HOOK = 'fmw_sweep_interrupted_runs';
+
+    /**
+     * Seconds a run may stay "running" before the sweep treats it as interrupted.
+     */
+    const INTERRUPTED_AFTER = 1800;
+
+    /**
+     * Schedule the hourly sweep once (group fmw, so deactivation and
+     * uninstall remove it with every other FlowMint action).
+     */
+    public static function schedule_sweep() {
+        if ( ! function_exists( 'as_has_scheduled_action' ) || as_has_scheduled_action( self::SWEEP_HOOK, [], 'fmw' ) ) {
+            return;
+        }
+        as_schedule_recurring_action( time() + HOUR_IN_SECONDS, HOUR_IN_SECONDS, self::SWEEP_HOOK, [], 'fmw' );
+    }
+
+    /**
+     * Action Scheduler reports that an action died (fatal error, time limit)
+     * or threw past our handler. If it was a workflow run, recover the run.
+     *
+     * @param int $action_id Action Scheduler action ID.
+     */
+    public static function on_action_died( $action_id ) {
+        if ( ! class_exists( 'ActionScheduler' ) ) {
+            return;
+        }
+        try {
+            $action = ActionScheduler::store()->fetch_action( (int) $action_id );
+        } catch ( Throwable $e ) {
+            return;
+        }
+        if ( ! $action || 'fmw_run_workflow' !== $action->get_hook() ) {
+            return;
+        }
+        $args = $action->get_args();
+        if ( ! empty( $args[0] ) ) {
+            self::recover_interrupted( (int) $args[0] );
+        }
+    }
+
+    /**
+     * Recover every run that has been "running" for longer than a run can
+     * legitimately take.
+     *
+     * @return int Runs recovered.
+     */
+    public static function sweep_interrupted_runs() {
+        global $wpdb;
+
+        /**
+         * Seconds a run may stay "running" before it is treated as interrupted.
+         *
+         * @since 0.11.0
+         *
+         * @param int $seconds Default 1800.
+         */
+        $after = max( 300, (int) apply_filters( 'fmw_interrupted_run_after_seconds', self::INTERRUPTED_AFTER ) );
+        $table = FMW_Run_Repository::table();
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- plugin-owned table; values prepared.
+        $ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT id FROM {$table} WHERE status = 'running' AND started_at IS NOT NULL AND started_at < %s",
+            // started_at is written with current_time( 'mysql' ): the SITE's
+            // local time, so the cut-off must be local time too.
+            wp_date( 'Y-m-d H:i:s', time() - $after )
+        ) );
+
+        foreach ( (array) $ids as $run_id ) {
+            self::recover_interrupted( (int) $run_id );
+        }
+
+        return count( (array) $ids );
+    }
+
+    /**
+     * Put an interrupted run through the normal failure path.
+     *
+     * The step that was running is the one after the last checkpoint. If its
+     * on_error is "retry", the run is retried and resumes at that step (the
+     * steps before it are not repeated); otherwise it is marked failed and
+     * the failure alert goes out — either way it no longer sits "running".
+     *
+     * @param int $run_id Run ID.
+     * @return bool True when the run was recovered.
+     */
+    public static function recover_interrupted( $run_id ) {
+        $run = FMW_Run_Repository::get( (int) $run_id );
+        if ( ! $run || 'running' !== $run['status'] ) {
+            return false;
+        }
+
+        $index       = null === $run['resume_step_index'] ? 0 : (int) $run['resume_step_index'];
+        $failed_step = null;
+        $workflow    = fmw()->registry->get( $run['workflow_id'] );
+        if ( $workflow ) {
+            $steps = $workflow->steps();
+            if ( isset( $steps[ $index ] ) && is_array( $steps[ $index ] ) ) {
+                $failed_step = [
+                    'index'    => $index,
+                    'name'     => (string) ( $steps[ $index ]['name'] ?? '' ),
+                    'type'     => (string) ( $steps[ $index ]['type'] ?? '' ),
+                    'on_error' => (string) ( $steps[ $index ]['on_error'] ?? 'fail' ),
+                ];
+            }
+        }
+
+        $error = new FMW_Step_Exception(
+            'interrupted',
+            'The run stopped part-way through this step — most likely the server\'s time limit or a PHP error — and did not finish on its own.'
+        );
+
+        self::handle_failure( (int) $run_id, $run, $error, microtime( true ), $failed_step );
+        return true;
     }
 
     /**
@@ -58,6 +189,7 @@ class FMW_Workflow_Job {
 
         // Mark running.
         FMW_Run_Repository::mark_running( $run_id );
+        self::extend_time_limit();
 
         do_action( 'fmw_workflow_run_started', $run_id, $run['workflow_id'], (int) $run['entry_id'] );
 
@@ -280,6 +412,30 @@ class FMW_Workflow_Job {
      * @param int    $max_retries settings.max_retries.
      * @return bool
      */
+    /**
+     * Ask PHP for more time for this run, where the host allows it.
+     *
+     * A workflow that uploads a 25 MB artwork file can outlast a 30-second
+     * limit on a slow connection. Hosts that forbid set_time_limit() keep
+     * their limit; an interrupted run is then recovered (see register()).
+     */
+    private static function extend_time_limit() {
+        $current = (int) ini_get( 'max_execution_time' );
+
+        /**
+         * Seconds of PHP execution time to request for one workflow run.
+         *
+         * @since 0.11.0
+         *
+         * @param int $seconds Default 300. 0 leaves the host's limit alone.
+         */
+        $wanted = (int) apply_filters( 'fmw_run_time_limit', 300 );
+
+        if ( $wanted > 0 && 0 !== $current && $current < $wanted && function_exists( 'set_time_limit' ) ) {
+            @set_time_limit( $wanted ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- disabled on some hosts; failing is fine.
+        }
+    }
+
     public static function should_retry( $on_error, $retryable, $retry_count, $max_retries ) {
         return 'retry' === $on_error && $retryable && (int) $retry_count < (int) $max_retries;
     }
