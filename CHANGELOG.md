@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-23
+
+### Added
+
+- **Promptless Forms' Entries screen now shows what a run did with the team
+  email.** `FMW_Entry_Notification_Status` answers Forms' new
+  `pforms_entry_notification_status` filter (Promptless Forms 1.12.0+) with
+  the newest run for the entry: **Sent by workflow** when a `send_email` or
+  `send_email_template` step succeeded, **Workflow failed** when the run
+  failed and it was going to email someone, **Workflow running** while it is
+  still going — each linking to the run.
+
+  The setup this fixes is the recommended one: with FlowMint sending the team
+  email, the form's own notification is switched off so nobody gets two
+  copies, and Forms' Email column then had nothing of its own to report. It
+  showed a dash, which reads as a delivery failure — on a live site the owner
+  concluded no submission was reaching anyone while the workflow had emailed
+  all three recipients. The **Workflow failed** case is new information that
+  screen never had: entry stored, team email never sent, and nothing said so.
+
+  We claim only what we did. A workflow that sends no email leaves the column
+  alone, and so does a completed run whose email step failed. Forms renders
+  the claim attributed to FlowMint, never as its own "Sent" tick. The
+  dependency stays one-way — Forms knows nothing about this plugin — and the
+  filter is harmless on an older Forms, where nothing calls it.
+
 ## [0.11.0] - 2026-09-21
 
 Found testing 725 Print Lab's two quote workflows end to end on a local
