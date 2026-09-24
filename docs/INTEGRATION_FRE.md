@@ -54,6 +54,32 @@ FlowMint Workflows does NOT call FormEngine's REST API (`/wp-json/fre/v1/connect
 
 This is intentional: REST calls between plugins on the same WP install would be wasteful HTTP overhead.
 
+### Filters (FormEngine offers, FlowMint Workflows answers)
+
+| Filter | Since | What we do with it |
+|---|---|---|
+| `pforms_entry_notification_status` | FRE 1.12.0 | Tell the Entries screen's **Email** column what our run did with the team email. |
+
+FormEngine's Email column reports FormEngine's own notification and nothing
+else. The sensible setup with FlowMint is to switch that notification off so
+the team gets one email instead of two — and then the column has nothing of
+its own to say. Until FRE 1.12.0 it showed a bare dash, which reads as a
+delivery failure; that cost a live site an afternoon (2026-09-22), with the
+owner concluding no submission was reaching anyone while the workflow had in
+fact emailed all three recipients.
+
+`FMW_Entry_Notification_Status` answers the filter with the newest run for
+that entry: **Sent by workflow** when a `send_email` / `send_email_template`
+step succeeded, **Workflow failed** when the run failed and it was going to
+email someone, **Workflow running** while it is still going. A run that sends
+no email at all leaves the column alone, and so does a completed run whose
+email step failed. Every answer links to the run.
+
+FormEngine renders it attributed to FlowMint and never as its own "Sent"
+tick — it is our claim, not its record. The direction of the dependency is
+unchanged: FormEngine knows nothing about this plugin, and adding the filter
+on an older FormEngine is harmless because nothing calls it.
+
 ## What FlowMint Workflows writes to FormEngine
 
 ### Via the `fre_delete_entry` step type

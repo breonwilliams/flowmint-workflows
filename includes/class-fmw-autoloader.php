@@ -59,6 +59,7 @@ class FMW_Autoloader {
         'FMW_Mcp'            => 'Mcp',
         // Admin
         'FMW_Admin'          => 'Admin',
+        'FMW_Entry_Notification_Status' => 'Admin',
     ];
 
     /**

@@ -394,6 +394,11 @@ final class FlowMint_Workflows {
             // toggle + MCP script download. Available on all installs;
             // FlowMint's connector is an add-on, not a premium feature.
             ( new FMW_Connector_Admin() )->init();
+
+            // Tell Promptless Forms' Entries screen what our runs did with
+            // the team email. Forms knows nothing about us; we answer its
+            // documented filter. See FMW_Entry_Notification_Status.
+            ( new FMW_Entry_Notification_Status() )->init();
         }
     }
 

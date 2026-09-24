@@ -92,6 +92,15 @@ The full docs live in `docs/`. Read in roughly this order:
 
 A failed step is retried ONLY when it carries `"on_error": "retry"` and the error is retryable (timeout, 5xx, `upstream_shape`, `interrupted`), up to `settings.max_retries` (default 3), after 1, 5, then 15 minutes, resuming at that step (`FMW_Workflow_Job::handle_failure()`). Any other failure is final at once. Either way the failed run fires `fmw_workflow_run_failed`. A run the server killed mid-step (time limit, fatal, memory) is recovered the same way since 0.11.0: Action Scheduler's `action_scheduler_unexpected_shutdown` / `action_scheduler_failed_execution` hand it to `FMW_Workflow_Job::recover_interrupted()`, and an hourly `fmw_sweep_interrupted_runs` action catches any left `running` for over 30 minutes (`fmw_interrupted_run_after_seconds`). **`FMW_Failure_Notifier`** (`includes/Core/class-fmw-failure-notifier.php`) listens at priority 100 and pushes a notification: Slack incoming webhook when the `slack_webhook` credential is configured (non-blocking POST), else email to the `notification_email` credential falling back to `admin_email`. Filters: `fmw_failure_notification_enabled`, `fmw_failure_notification_message`. The notifier is defensively wrapped — it can never break the failure path it observes. (There is still no general-purpose `FMW_Slack_Client` step for workflows to POST arbitrary messages — `docs/SETUP_SLACK.md`'s webhook setup section now serves the notifier.)
 
+## Promptless Forms' Entries screen
+
+`FMW_Entry_Notification_Status` (admin only) answers FormEngine's
+`pforms_entry_notification_status` filter so its **Email** column can say that
+a workflow sent the team email, that the workflow failed, or that it is still
+running — with a link to the run. Read `docs/INTEGRATION_FRE.md` before
+touching it: what we return is rendered as OUR claim, and the coupling stays
+one-way.
+
 ## Plugin file structure
 
 ```
