@@ -4,7 +4,7 @@ Tags: workflow, automation, form submissions, async, action scheduler
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.11.0
+Stable tag: 0.12.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,9 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 
 == Changelog ==
 
+= 0.12.0 =
+* Added: Promptless Forms' Form Entries list now shows what your workflow did with the team email — "Sent by workflow", "Workflow failed" or "Workflow running" — with a link to the run. Needs Promptless Forms 1.12.0. Before this the column had nothing to show, which looked like a delivery failure.
+
 = 0.11.0 =
 * Fixed: a run the server cut off part-way (time limit, fatal error, memory) stayed "running" forever, with no retry, no alert and none of the later steps. It is now recovered: retried from that step if it is set to on_error "retry", otherwise marked failed and alerted.
 * Changed: each run asks for up to five minutes of PHP time, and Google Drive uploads go in 8 MB parts instead of 1 MB.
@@ -79,16 +82,14 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 * Added: the ingest step, `pre_upsert_records`. Takes the records a previous step fetched from a system of record, maps each one with a per-record template, and creates or updates the matching Post Runtime record by source and external id — so re-running a scheduled workflow never duplicates and an unchanged record is never rewritten. Two guards make an upstream change loud instead of silent, and records the upstream stops returning are kept or unpublished, never deleted. Requires Post Runtime Engine 0.9.0 or newer.
 * Changed: declares compatibility with WordPress 7.1.
 
-= 0.7.0 =
-* Added: workflow emails and messages can now use the option LABEL a visitor actually chose, not the value stored behind it. `{{ labels.workshop }}` writes "Hand-Cut Joinery Intensive" where `{{ data.workshop }}` writes "joinery". Machine steps keep using the raw value, so nothing existing changes.
-* Fixed: uploaded-file details in workflows are now documented as they actually behave — keyed by field name, with no file URL, and a shape that changes when more than one file is attached. Each of those failed silently before, producing a workflow that reported success while sending nothing.
-* Fixed: the connector could not reach an HTTPS local development site.
-
 WordPress truncates this section at 5,000 characters, so it keeps a rolling window of the
 six most recent releases. The complete history lives in CHANGELOG.md in the plugin folder,
 and on the GitHub releases page.
 
 == Upgrade Notice ==
+
+= 0.12.0 =
+Promptless Forms' entry list now shows what your workflow did with the team email, with a link to the run (needs Promptless Forms 1.12.0). Existing workflows are unaffected.
 
 = 0.11.0 =
 Runs cut off by the server no longer stay "running" forever: they are retried or marked failed and alerted. Large Drive uploads get more time. Existing workflows are unaffected.
@@ -105,5 +106,3 @@ Plugin Check clean-up of the 0.8.0 package; no behaviour change. Safe for all us
 = 0.8.0 =
 Adds the Post Runtime ingest step (`pre_upsert_records`) for scheduled, duplicate-free imports from other systems; needs Post Runtime Engine 0.9.0+. Existing workflows are unaffected.
 
-= 0.7.0 =
-Adds a `labels` namespace so workflow emails use the option text a visitor chose rather than the stored value. Corrects the documented shape of uploaded-file data, which was wrong in three ways that all failed silently. Additive; existing workflows are unaffected.
