@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-09-25
+
+### Fixed
+
+- **We no longer talk over Promptless Forms' Email column.** 0.12.0 claimed
+  that column whenever a run had emailed anyone, which on a form whose own
+  notification is ON replaced a true "Promptless Forms emailed your team" tick
+  with a link to our run — and on the form that exposed this, live, the run's
+  only email step was the auto-reply to the visitor. We now answer only when
+  Forms has nothing of its own to report (`off` or `not_sent`); a send or
+  failure Forms recorded itself stands. Forms whose team email comes from a
+  workflow are unaffected, which is the setup the feature exists for.
+
 ## [0.12.0] - 2026-09-23
 
 ### Added
