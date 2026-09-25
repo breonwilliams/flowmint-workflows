@@ -17,6 +17,14 @@
  * What we report is our own claim, and Forms renders it as such: attributed to
  * FlowMint, never as Forms' own "Sent" tick.
  *
+ * WE FILL A GAP; WE DO NOT TALK OVER FORMS. If Forms has its own record for an
+ * entry — it sent the notification, or tried and failed — that record stands
+ * and we stay quiet. 0.12.0 claimed the column whenever a run had emailed
+ * anyone, which on a form whose own notification is ON replaced a true "Forms
+ * emailed your team" tick with a link to a run whose only email was the
+ * customer's auto-reply. Seen live on 725 Print Lab's contact form the day
+ * 0.12.0 shipped.
+ *
  * @package FlowMintWorkflows\Admin
  */
 
@@ -68,6 +76,16 @@ class FMW_Entry_Notification_Status {
         $entry_id = isset( $entry['id'] ) ? (int) $entry['id'] : 0;
 
         if ( $entry_id <= 0 ) {
+            return $status;
+        }
+
+        // Forms already knows what happened to its own notification. Its
+        // record is the more direct fact and it stays; anything our run did
+        // is visible in Run History. We speak only when Forms is silent
+        // ('off' or 'not_sent'), which is the setup this exists for.
+        $forms_own = isset( $status['state'] ) ? (string) $status['state'] : '';
+
+        if ( in_array( $forms_own, [ 'sent', 'failed' ], true ) ) {
             return $status;
         }
 

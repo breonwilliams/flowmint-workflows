@@ -169,6 +169,61 @@ class EntryNotificationStatusTest extends UnitTestCase {
         );
     }
 
+    // ── We fill a gap; we do not talk over Forms ────────────────────────
+
+    public function test_forms_own_successful_send_is_left_alone() {
+        // 0.12.0's defect, seen live: on a form whose own notification is ON,
+        // Forms had emailed the team and shown its tick. We replaced it with
+        // a link to a run whose only email was the customer's auto-reply.
+        $forms_sent = [
+            'state'       => 'sent',
+            'label'       => 'Sent',
+            'description' => 'Promptless Forms handed this notification to the mail server.',
+            'source'      => '',
+            'url'         => '',
+        ];
+        self::$run   = [ 'id' => 241, 'status' => 'completed' ];
+        self::$steps = [ [ 'step_name' => 'customer_ack', 'step_type' => 'send_email', 'status' => 'success' ] ];
+
+        $status = ( new \FMW_Entry_Notification_Status() )->report( $forms_sent, [ 'id' => 199 ] );
+
+        $this->assertSame( $forms_sent, $status, "Forms' own record is the more direct fact and stands" );
+    }
+
+    public function test_forms_own_failure_is_left_alone() {
+        $forms_failed = [
+            'state'       => 'failed',
+            'label'       => 'Failed',
+            'description' => 'SMTP refused',
+            'source'      => '',
+            'url'         => '',
+        ];
+        self::$run   = [ 'id' => 242, 'status' => 'completed' ];
+        self::$steps = [ $this->email_step( 'success' ) ];
+
+        $status = ( new \FMW_Entry_Notification_Status() )->report( $forms_failed, [ 'id' => 200 ] );
+
+        $this->assertSame( $forms_failed, $status, 'a failure Forms recorded is not ours to paper over' );
+    }
+
+    public function test_we_still_speak_when_forms_has_nothing_to_say() {
+        // Both states where Forms is silent: the notification is off, or it is
+        // on and nothing was recorded.
+        foreach ( [ 'off', 'not_sent' ] as $silent ) {
+            \FMW_Entry_Notification_Status::flush_cache();
+            self::$run   = [ 'id' => 236, 'status' => 'completed' ];
+            self::$steps = [ $this->email_step( 'success' ) ];
+
+            $status = ( new \FMW_Entry_Notification_Status() )->report(
+                [ 'state' => $silent, 'label' => 'x', 'description' => '', 'source' => '', 'url' => '' ],
+                [ 'id' => 195 ]
+            );
+
+            $this->assertSame( 'external', $status['state'], "Forms state: {$silent}" );
+            $this->assertSame( 'Sent by workflow', $status['label'] );
+        }
+    }
+
     public function test_the_filter_is_registered_not_the_other_way_round() {
         // The coupling is one-way: we listen to Forms. Forms must never need
         // to know this class exists.
