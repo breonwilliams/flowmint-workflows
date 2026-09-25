@@ -68,8 +68,16 @@ delivery failure; that cost a live site an afternoon (2026-09-22), with the
 owner concluding no submission was reaching anyone while the workflow had in
 fact emailed all three recipients.
 
-`FMW_Entry_Notification_Status` answers the filter with the newest run for
-that entry: **Sent by workflow** when a `send_email` / `send_email_template`
+`FMW_Entry_Notification_Status` answers the filter **only when FormEngine has
+nothing of its own to report** — its status is `off` or `not_sent`. If
+FormEngine sent the notification itself, or tried and failed, that record
+stands and we stay quiet: it is the more direct fact, and whatever our run did
+is in Run History. 0.12.0 claimed the column whenever a run had emailed
+anyone, which on a form whose own notification is ON replaced a true "sent"
+tick with a link to a run whose only email was the customer's auto-reply
+(seen live, fixed in 0.12.1).
+
+When FormEngine is silent, we answer with the newest run for that entry: **Sent by workflow** when a `send_email` / `send_email_template`
 step succeeded, **Workflow failed** when the run failed and it was going to
 email someone, **Workflow running** while it is still going. A run that sends
 no email at all leaves the column alone, and so does a completed run whose
