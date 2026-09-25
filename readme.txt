@@ -4,7 +4,7 @@ Tags: workflow, automation, form submissions, async, action scheduler
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.12.0
+Stable tag: 0.12.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,9 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 
 == Changelog ==
 
+= 0.12.1 =
+* Fixed: on the Form Entries list, a form that sends its own notification showed "Sent by workflow" instead of its own "sent" tick — pointing at a run whose email may have been the customer's auto-reply rather than your team's. FlowMint now reports there only when Promptless Forms has nothing of its own to show.
+
 = 0.12.0 =
 * Added: Promptless Forms' Form Entries list now shows what your workflow did with the team email — "Sent by workflow", "Workflow failed" or "Workflow running" — with a link to the run. Needs Promptless Forms 1.12.0. Before this the column had nothing to show, which looked like a delivery failure.
 
@@ -78,15 +81,14 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 = 0.8.1 =
 * Fixed: four Plugin Check errors in the 0.8.0 package (unescaped exception messages in the ingest step). No behaviour change.
 
-= 0.8.0 =
-* Added: the ingest step, `pre_upsert_records`. Takes the records a previous step fetched from a system of record, maps each one with a per-record template, and creates or updates the matching Post Runtime record by source and external id — so re-running a scheduled workflow never duplicates and an unchanged record is never rewritten. Two guards make an upstream change loud instead of silent, and records the upstream stops returning are kept or unpublished, never deleted. Requires Post Runtime Engine 0.9.0 or newer.
-* Changed: declares compatibility with WordPress 7.1.
-
 WordPress truncates this section at 5,000 characters, so it keeps a rolling window of the
 six most recent releases. The complete history lives in CHANGELOG.md in the plugin folder,
 and on the GitHub releases page.
 
 == Upgrade Notice ==
+
+= 0.12.1 =
+Fixes the Form Entries "Email" column claiming entries whose notification Promptless Forms sent itself. Existing workflows are unaffected.
 
 = 0.12.0 =
 Promptless Forms' entry list now shows what your workflow did with the team email, with a link to the run (needs Promptless Forms 1.12.0). Existing workflows are unaffected.
@@ -103,6 +105,4 @@ Imports can map a photo URL per record; Post Runtime downloads each image once a
 = 0.8.1 =
 Plugin Check clean-up of the 0.8.0 package; no behaviour change. Safe for all users.
 
-= 0.8.0 =
-Adds the Post Runtime ingest step (`pre_upsert_records`) for scheduled, duplicate-free imports from other systems; needs Post Runtime Engine 0.9.0+. Existing workflows are unaffected.
 
