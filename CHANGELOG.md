@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Preflight no longer makes a current install look un-migrated.**
+  `diagnostics.stored_plugin_version` has always reported the database schema
+  version (`fmw_db_version`, 0.4.0), not the plugin version, so a fully
+  migrated 0.12.1 site read as if it were stuck on 0.4.0. Preflight now also
+  returns `db_schema_version` and `db_schema_version_expected`; when they
+  match, migrations are complete. `stored_plugin_version` stays as a
+  deprecated alias so nothing that reads it breaks.
+- **The preflight example in `docs/CONNECTOR_API.md` matches the response.**
+  It showed key names the endpoint never returned (`fmw_manage_workflows`,
+  `drive` / `printavo` / `slack`, `recent_calls`) and left out
+  `supported_trigger_types`, `context_shape` and `error_policy`.
+- **Comments now say when capabilities are re-granted.** Two comments said
+  "every plugin-version upgrade"; the re-grant runs on an `FMW_DB_VERSION`
+  bump, so a release that adds a capability must bump the schema version
+  (as 0.3.0 did). No behaviour change.
+
 ## [0.12.1] - 2026-09-25
 
 ### Fixed

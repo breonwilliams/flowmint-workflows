@@ -322,12 +322,14 @@ final class FlowMint_Workflows {
     /**
      * Run database schema migration if needed.
      *
-     * Also runs the capability re-grant on every version upgrade. Mirrors
-     * FRE_Upgrader's pattern — capability grants are idempotent (WP's
-     * add_cap no-ops when the role already has the cap) so this is safe
-     * to call repeatedly. Necessary because plugin auto-updates and
-     * wp-cli updates don't always re-trigger the activation hook;
-     * version-bump is the reliable signal that "something changed."
+     * Also runs the capability re-grant, on every FMW_DB_VERSION bump —
+     * NOT on every plugin-version bump. A release that adds or changes a
+     * capability must therefore bump FMW_DB_VERSION, even with no DDL
+     * change (that is exactly what 0.3.0 was; see the FMW_DB_VERSION
+     * comment). Capability grants are idempotent (WP's add_cap no-ops
+     * when the role already has the cap), so a bump is always safe.
+     * This path exists because plugin auto-updates and wp-cli updates
+     * don't re-trigger the activation hook.
      */
     private function maybe_run_db_migration() {
         $stored_version = get_option( 'fmw_db_version', '0.0.0' );
