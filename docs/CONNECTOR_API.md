@@ -179,37 +179,53 @@ parent records its expression and lists as written.
 
 `GET /wp-json/flowmint/v1/connector/preflight`
 
-Health check. Returns plugin version, capability info, schema doc URL, recent connector calls (for debugging).
+Health check. Returns plugin version, dependency and capability info, the schema doc URL, the interpolation context shape, the error policy, and diagnostics.
 
-**Response:**
+**Response** (`context_shape` and `error_policy` abbreviated):
 ```json
 {
   "success": true,
   "data": {
-    "plugin_version": "1.0.0",
+    "plugin_version": "0.12.1",
     "connector_api_version": "v1",
     "connector_enabled": true,
     "fre_active": true,
-    "fre_version": "1.6.0",
+    "fre_version": "1.13.0",
     "action_scheduler_active": true,
-    "authenticated_as": "962486pwpadmin",
+    "authenticated_as": "admin",
     "user_capabilities": {
-      "fmw_manage_workflows": true
+      "fmw_manage": true
     },
+    "supported_trigger_types": ["form", "schedule"],
     "schema_document_url": "https://example.com/wp-content/plugins/flowmint-workflows/docs/CONNECTOR_API.md",
+    "context_shape": { "...": "..." },
+    "error_policy": "...",
     "diagnostics": {
-      "stored_plugin_version": "1.0.0",
-      "database_health": { "ok": true, "tables_present": ["wp_fmw_workflows", "wp_fmw_workflow_runs", "wp_fmw_workflow_run_steps"] },
+      "db_schema_version": "0.4.0",
+      "db_schema_version_expected": "0.4.0",
+      "stored_plugin_version": "0.4.0",
+      "database_health": { "ok": true, "tables_present": ["wp_fmw_workflows", "wp_fmw_workflow_runs", "wp_fmw_workflow_run_steps"], "tables_missing": [] },
       "credentials_configured": {
-        "drive": true,
-        "printavo": true,
-        "slack": false
-      },
-      "recent_calls": [...]
+        "drive_service_account": false,
+        "printavo_api_token": false,
+        "slack_webhook": false
+      }
     }
   }
 }
 ```
+
+`diagnostics.db_schema_version` is the **database schema** version
+(`FMW_DB_VERSION`), not the plugin version. It moves only when the tables
+change or an upgrade task has to run once, so it normally trails
+`plugin_version`. Migrations are complete when it equals
+`db_schema_version_expected`. `stored_plugin_version` is a deprecated alias
+of `db_schema_version`, kept for existing readers; despite its name it has
+always reported the schema version.
+
+`credentials_configured` reports which site credentials are set. `false` is
+not an error: it only means workflows using that service's steps will fail
+on this site until the credential is added in wp-admin.
 
 ---
 

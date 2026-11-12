@@ -96,7 +96,17 @@ class FMW_REST_Preflight {
             ],
             'error_policy' => 'Per step, on_error: "fail" (default) fails the run at once — it is marked Failed, the failure alert goes out, and it can be replayed. "continue" records the failure, gives the step the output { failed: true, error } and carries on. "retry" retries the run on a RETRYABLE error (timeout, 5xx, rate_limited, upstream_shape — not a 4xx, bad config or php_error) up to settings.max_retries (default 3) after 1, 5, then 15 minutes; the retry RESUMES AT THIS STEP with the context the earlier steps left, so they do not run again. Use "retry" on steps that call an outside service that can be briefly down (http_*, printavo_*, drive_*); leave "fail" on steps whose error will not go away by waiting. While a retry waits, the run shows status queued with error_code and failed_step set. Editing the workflow\'s steps while a retry waits makes it fail with workflow_changed.',
             'diagnostics' => [
-                'stored_plugin_version' => get_option( 'fmw_db_version', '0.0.0' ),
+                // The DATABASE SCHEMA version (FMW_DB_VERSION), not the plugin
+                // version: it only moves when the tables change or an upgrade
+                // task must run once, so it normally trails plugin_version.
+                // db_schema_version_expected is what this code migrates to;
+                // when the two match, migrations are complete.
+                'db_schema_version'          => get_option( 'fmw_db_version', '0.0.0' ),
+                'db_schema_version_expected' => FMW_DB_VERSION,
+                // Deprecated alias of db_schema_version, kept so existing
+                // readers keep working. The name suggested the plugin
+                // version, which made a current install look un-migrated.
+                'stored_plugin_version'      => get_option( 'fmw_db_version', '0.0.0' ),
                 'database_health' => [
                     'ok'             => empty( $health ),
                     'tables_present' => array_values( FMW_Schema::get_table_names() ),

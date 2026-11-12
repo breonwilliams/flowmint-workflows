@@ -94,9 +94,11 @@ class FMW_Capabilities {
      *
      * Called from:
      *   - Plugin activation hook (fresh installs)
-     *   - `maybe_run_db_migration()` on every plugin-version upgrade (so
+     *   - `maybe_run_db_migration()` on every FMW_DB_VERSION bump (so
      *     existing sites that update via wp-cli or auto-update still pick
-     *     up the capability without manual re-activation)
+     *     up the capability without manual re-activation). A plugin-version
+     *     bump alone does NOT re-grant: a release that adds a capability
+     *     must bump FMW_DB_VERSION too.
      */
     public static function grant_default_capabilities() {
         foreach ( self::default_roles() as $role_slug ) {
