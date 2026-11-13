@@ -65,10 +65,11 @@ jobs:
           php-version: ${{ matrix.php }}
           coverage: none
           tools: composer
-      # `composer update`: neither composer.lock nor vendor/ is committed
-      # (both are gitignored), so each PHP version resolves its own
-      # compatible dependency set — the same step the sibling plugins use.
-      - name: Resolve dependencies for this PHP version
-        run: composer update --no-interaction --prefer-dist
+      # `composer install`: composer.lock is committed and pins the exact
+      # library versions a release ships, so the tests run against what
+      # customers get. composer.json's config.platform.php (8.1.0) makes the
+      # lock valid on every PHP version in the matrix.
+      - name: Install the locked dependencies
+        run: composer install --no-interaction --prefer-dist
       - name: Run Unit suite
         run: composer run test:unit

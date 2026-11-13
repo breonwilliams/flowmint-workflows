@@ -26,6 +26,21 @@ fi
 
 echo "Building ${PLUGIN_SLUG} v${VERSION}..."
 
+# The release ships EXACTLY the library versions recorded in composer.lock.
+# Without it, `composer install` resolves whatever is newest on build day,
+# so two builds of the same code could ship different Guzzle / Google
+# client versions and nobody would know (0.12.2 did, before this check).
+# A lock that no longer matches composer.json is refused for the same
+# reason: Composer would warn and install the stale set anyway.
+if [ ! -f composer.lock ]; then
+    echo "Error: composer.lock is missing. Run 'composer update', test, and commit it (see RELEASE.md, \"Library versions\")."
+    exit 1
+fi
+if ! composer validate --no-check-all --no-check-publish --quiet; then
+    echo "Error: composer.lock is out of date with composer.json. Run 'composer update', test, and commit the new composer.lock."
+    exit 1
+fi
+
 # Clean previous build.
 rm -rf "${BUILD_DIR}"
 mkdir -p "${TEMP_DIR}"
@@ -35,7 +50,11 @@ mkdir -p "${TEMP_DIR}"
 # The exclude list drops VCS/IDE state, lint/test config, build & test
 # artifacts (build/, release/, *.zip, .phpunit.result.cache, *.log), the
 # build script itself (we don't ship the script that builds the ZIP),
-# source-only dirs (node_modules, tests), and OS junk. Plugin Check (the
+# source-only dirs (node_modules, tests), and OS junk. vendor/ is left out
+# too: the install below builds it fresh from composer.lock, so the local
+# development vendor/ (with its dev packages) never leaks into the ZIP.
+# composer.lock IS copied: the install reads it, and it ships as the record
+# of what the ZIP contains. Plugin Check (the
 # WordPress.org compliance tool) flags ZIPs, hidden files, and shell
 # scripts that ship inside a plugin — the exclusions below keep the
 # deployed plugin folder clean.
@@ -49,7 +68,7 @@ rsync -av --exclude-from=- . "${TEMP_DIR}/" <<'EXCLUDE'
 .phpunit.result.cache
 phpunit.xml
 phpunit.xml.dist
-composer.lock
+vendor
 node_modules
 tests
 bin/install-wp-tests.sh

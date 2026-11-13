@@ -5,7 +5,8 @@ node_modules/
 .phpunit.result.cache
 composer
 composer-setup.php
-composer.lock
+# composer.lock is COMMITTED: it pins the exact library versions a release
+# ships. See RELEASE.md, "Library versions".
 
 # IDE/Editor files
 .idea/
