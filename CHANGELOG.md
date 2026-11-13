@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-11-12
+
 ### Fixed
 
 - **Preflight no longer makes a current install look un-migrated.**
