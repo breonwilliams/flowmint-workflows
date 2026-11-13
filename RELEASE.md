@@ -35,6 +35,33 @@ Every release must update the version number in **every** location below.
 
 ---
 
+## Library versions
+
+`composer.lock` is committed. It records the exact version of every bundled
+library (Google API client, Guzzle, Action Scheduler and their
+dependencies), and `bin/build-release.sh` installs exactly those, so a
+release ships what was tested. The build stops if the lock is missing or no
+longer matches `composer.json`, and CI installs from it too.
+
+Until 2026-11-12 the lock was gitignored and the build excluded it, so each
+build resolved whatever was newest that day. 0.12.2 shipped Guzzle 8.5
+where 0.12.1 had 8.2, and nothing recorded the difference. The committed
+lock is the one 0.12.2 shipped.
+
+**To update libraries on purpose** (a security fix, a needed feature):
+
+1. `composer update` (or `composer update vendor/package` for one).
+   `config.platform.php` in `composer.json` keeps the choice compatible
+   with PHP 8.1, the plugin's floor.
+2. `composer run test:unit`, then exercise the Drive and HTTP steps on Local.
+3. Commit `composer.lock` in its own change and say in `CHANGELOG.md` what
+   moved, under `### Changed` (or `### Security`).
+
+Never run `composer update` as part of a release: a release ships the
+versions that were already tested.
+
+---
+
 ## Pre-release checklist
 
 - [ ] All code changes are committed and pushed to `main`
@@ -44,6 +71,7 @@ Every release must update the version number in **every** location below.
 - [ ] If `FMW_REQUIRED_FRE_VERSION` was bumped: verify the target FRE version is actually released
 - [ ] Plugin Check run locally returns clean (no errors)
 - [ ] `composer install --no-dev` runs without errors (the build script needs Composer on PATH)
+- [ ] `composer.lock` is committed and current (the build refuses otherwise). If it changed since the last release, the CHANGELOG says which libraries moved
 - [ ] No PHP errors in `debug.log` on a smoke-test install
 - [ ] Spot-check the MCP connector page (FlowMint Workflows → Claude Connection) loads cleanly
 - [ ] If step types changed: run any relevant unit tests (`composer test`)

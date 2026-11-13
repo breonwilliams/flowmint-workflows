@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **Releases ship the library versions that were tested.** `composer.lock` is
+  now committed (it was gitignored), and `bin/build-release.sh` installs from
+  it into a clean `vendor/`. The build stops if the lock is missing or out of
+  date, and CI installs from it instead of resolving fresh on every run.
+  Before this, each build took whatever versions were newest that day: 0.12.2
+  shipped Guzzle 8.5 where 0.12.1 had 8.2, with nothing recording it. The
+  committed lock is exactly what 0.12.2 shipped, so the next release changes
+  no library. How to update libraries on purpose is in `RELEASE.md`,
+  "Library versions".
+
 ## [0.12.2] - 2026-11-12
 
 ### Fixed
