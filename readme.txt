@@ -4,7 +4,7 @@ Tags: workflow, automation, form submissions, async, action scheduler
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.12.1
+Stable tag: 0.12.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,10 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 
 == Changelog ==
 
+= 0.12.2 =
+* Fixed: the connector's preflight check reported the database schema version under the name "stored_plugin_version", so a fully updated site looked as if its update had not finished. It now also reports db_schema_version beside the version it should be; when the two match, the update is complete. The old name still works.
+* Fixed: the preflight example in docs/CONNECTOR_API.md now matches what the check returns.
+
 = 0.12.1 =
 * Fixed: on the Form Entries list, a form that sends its own notification showed "Sent by workflow" instead of its own "sent" tick — pointing at a run whose email may have been the customer's auto-reply rather than your team's. FlowMint now reports there only when Promptless Forms has nothing of its own to show.
 
@@ -78,14 +82,14 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 = 0.9.0 =
 * Added: the ingest step `pre_upsert_records` maps a photo URL per record (`featured_image_url`). Post Runtime downloads each image once, reuses it on every later run and sets it as the record's featured image; a URL that fails is a per-record warning, not a failure. Requires Post Runtime Engine 0.10.0 or newer for the image.
 
-= 0.8.1 =
-* Fixed: four Plugin Check errors in the 0.8.0 package (unescaped exception messages in the ingest step). No behaviour change.
-
 WordPress truncates this section at 5,000 characters, so it keeps a rolling window of the
 six most recent releases. The complete history lives in CHANGELOG.md in the plugin folder,
 and on the GitHub releases page.
 
 == Upgrade Notice ==
+
+= 0.12.2 =
+The connector's preflight check now says plainly when a site's database is up to date. No behaviour change; existing workflows are unaffected.
 
 = 0.12.1 =
 Fixes the Form Entries "Email" column claiming entries whose notification Promptless Forms sent itself. Existing workflows are unaffected.
@@ -102,7 +106,5 @@ Requires PHP 8.1. Retries now actually run (for steps set to on_error "retry") a
 = 0.9.0 =
 Imports can map a photo URL per record; Post Runtime downloads each image once and sets it as the featured image (needs Post Runtime Engine 0.10.0+). Existing workflows are unaffected.
 
-= 0.8.1 =
-Plugin Check clean-up of the 0.8.0 package; no behaviour change. Safe for all users.
 
 
