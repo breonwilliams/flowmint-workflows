@@ -36,7 +36,9 @@
  *     Action Scheduler 4.1 made the same move for its own recurring check;
  *   - when one of FlowMint's own admin screens loads;
  *   - once after an install, an update or a reactivation (an autoloaded
- *     version stamp, so steady-state page views make no query);
+ *     version stamp, so steady-state page views make no query). That check
+ *     also rebuilds workflow ticks once, since older versions could leave a
+ *     site with its reconcile in place and its ticks gone;
  *   - on every WP-CLI load, because `wp action-scheduler run` fires the
  *     queue-start hook only when something is due.
  *
@@ -126,7 +128,17 @@ class FMW_Schedule_Maintenance {
             return;
         }
 
-        if ( self::ensure() && FMW_VERSION !== get_option( self::CHECKED_VERSION_OPTION ) ) {
+        if ( ! self::ensure() ) {
+            return;
+        }
+
+        if ( FMW_VERSION !== get_option( self::CHECKED_VERSION_OPTION ) ) {
+            // Once per version, rebuild workflow ticks whatever the check
+            // found. Versions before 0.12.3 lost every tick on a
+            // reactivation and waited for the daily reconcile, so a site can
+            // arrive here with its reconcile in place and its ticks gone.
+            // Idempotent, and unique in Action Scheduler.
+            as_enqueue_async_action( FMW_Schedule_Listener::RECONCILE_NOW_HOOK, [], self::GROUP, true );
             update_option( self::CHECKED_VERSION_OPTION, FMW_VERSION, true );
         }
     }

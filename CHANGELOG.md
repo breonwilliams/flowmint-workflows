@@ -31,7 +31,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   action, and until now ticks were rebuilt only by the daily reconcile, up to
   a day later. When the daily reconcile has to be scheduled again, a one-off
   reconcile (`fmw_reconcile_scheduled_events_now`) now runs through Action
-  Scheduler in the same queue run.
+  Scheduler in the same queue run. The first check after updating to this
+  version queues one as well, for sites that lost their ticks under an
+  earlier version.
 - **The release ZIP's class map lists only files it contains, and a page
   view fits in a 40M memory limit again.** Composer writes the optimized
   class map before the Google client's cleanup script removes every API
