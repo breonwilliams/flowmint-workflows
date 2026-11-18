@@ -279,7 +279,16 @@ require_once $o['abspath'] . 'wp-includes/plugin.php';
 if ( empty( $o['spawn_cron'] ) ) {
     add_filter( 'action_scheduler_allow_async_request_runner', '__return_false' );
 }
-if ( empty( $o['woo'] ) ) {
+if ( ! empty( $o['keep'] ) ) {
+    $keep = $o['keep'];
+    add_filter( 'option_active_plugins', function ( $plugins ) use ( $keep ) {
+        return array_values( array_filter( (array) $plugins, function ( $p ) use ( $keep ) {
+            return in_array( dirname( $p ), $keep, true );
+        } ) );
+    } );
+    add_filter( 'stylesheet', function () { return 'twentytwentyfive'; } );
+    add_filter( 'template', function () { return 'twentytwentyfive'; } );
+} elseif ( empty( $o['woo'] ) ) {
     add_filter( 'option_active_plugins', function ( $plugins ) {
         return array_values( array_filter( (array) $plugins, function ( $p ) {
             return 0 !== strpos( $p, 'woocommerce' );
@@ -373,6 +382,10 @@ function fmwsm_child_cmd( array $o ) {
     if ( $o['memory'] ) {
         $cmd[] = '-d';
         $cmd[] = 'memory_limit=' . $o['memory'];
+    }
+    if ( ! empty( $o['opcache'] ) ) {
+        $cmd[] = '-d';
+        $cmd[] = 'opcache.enable_cli=1';
     }
     $cmd[] = fmwsm_child_script();
     $cmd[] = wp_json_encode( $o );
@@ -620,11 +633,18 @@ if ( in_array( 'page', $fmwsm_run, true ) ) {
             $a = fmwsm_child( [ 'woo' => $woo, 'mode' => 'fmw-admin' ] );
             fmwsm_note( sprintf( '%s: a FlowMint admin screen makes %d (the check runs there by design)', fmwsm_label( $woo ), $a['fmw_as_queries'] ?? -1 ) );
         }
-        $m = fmwsm_child( [ 'woo' => false, 'memory' => '40M' ] );
-        fmwsm_assert( 'without WooCommerce at memory_limit=40M: page view completes', empty( $m['fatal'] ), (string) ( $m['fatal'] ?? '' ) );
-        fmwsm_note( sprintf( 'peak %.1f MB at 40M', $m['peak_mb'] ?? -1 ) );
-        $q = fmwsm_child( [ 'woo' => false, 'memory' => '40M', 'mode' => 'queue' ] );
-        fmwsm_assert( 'without WooCommerce at memory_limit=40M: a queue run completes', empty( $q['fatal'] ), (string) ( $q['fatal'] ?? '' ) );
+        // memory_limit=40M has been seen in production. Measured with only
+        // Promptless Forms and FlowMint active and a default theme, so the
+        // result is about FlowMint, not about whatever else this site runs.
+        // With opcache, as production runs it, when the PHP here has it.
+        $only     = [ 'form-runtime-engine', 'flowmint-workflows' ];
+        $opcache  = extension_loaded( 'Zend OPcache' );
+        fmwsm_note( '40M checks: Forms + FlowMint only, opcache ' . ( $opcache ? 'on' : 'NOT AVAILABLE in this PHP' ) );
+        $m = fmwsm_child( [ 'keep' => $only, 'memory' => '40M', 'opcache' => $opcache ] );
+        fmwsm_assert( 'at memory_limit=40M: page view completes', empty( $m['fatal'] ), (string) ( $m['fatal'] ?? '' ) );
+        fmwsm_note( sprintf( 'peak %.1f MB', $m['peak_mb'] ?? -1 ) );
+        $q = fmwsm_child( [ 'keep' => $only, 'memory' => '40M', 'opcache' => $opcache, 'mode' => 'queue' ] );
+        fmwsm_assert( 'at memory_limit=40M: a queue run completes', empty( $q['fatal'] ), (string) ( $q['fatal'] ?? '' ) );
         fmwsm_assert_state( 'after the 40M queue run', fmwsm_enabled_scheduled() );
     } );
 }
