@@ -4,7 +4,7 @@ Tags: workflow, automation, form submissions, async, action scheduler
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.12.2
+Stable tag: 0.12.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -57,6 +57,12 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 
 == Changelog ==
 
+= 0.12.3 =
+* Fixed: page views no longer query Action Scheduler. FlowMint checks its two maintenance actions when the queue runs, on its own admin screens and once after an update, instead of on every request.
+* Fixed: those actions could be scheduled several times over, and the copies never went away. FlowMint now keeps exactly one of each and removes extras on the first request after updating.
+* Fixed: after a reactivation, a scheduler reset or a restore, scheduled workflows are rescheduled straight away instead of up to a day later.
+* Fixed: the release ZIP's class map listed 37,000 deleted files and was loaded on every request; a page view now fits in a 40M memory limit.
+
 = 0.12.2 =
 * Fixed: the connector's preflight check reported the database schema version under the name "stored_plugin_version", so a fully updated site looked as if its update had not finished. It now also reports db_schema_version beside the version it should be; when the two match, the update is complete. The old name still works.
 * Fixed: the preflight example in docs/CONNECTOR_API.md now matches what the check returns.
@@ -79,14 +85,14 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 * Fixed: retries now run, on steps set to on_error "retry", and resume at the failed step; runs left waiting by earlier versions are marked failed so they can be replayed.
 * Fixed: conditions mixing function calls with operators evaluate as written; try_catch steps see earlier values; workflow and form titles are filled in.
 
-= 0.9.0 =
-* Added: the ingest step `pre_upsert_records` maps a photo URL per record (`featured_image_url`). Post Runtime downloads each image once, reuses it on every later run and sets it as the record's featured image; a URL that fails is a per-record warning, not a failure. Requires Post Runtime Engine 0.10.0 or newer for the image.
-
 WordPress truncates this section at 5,000 characters, so it keeps a rolling window of the
 six most recent releases. The complete history lives in CHANGELOG.md in the plugin folder,
 and on the GitHub releases page.
 
 == Upgrade Notice ==
+
+= 0.12.3 =
+Removes two database queries from every page view, cleans up duplicated scheduled maintenance tasks, and cuts the plugin's memory use. Existing workflows are unaffected.
 
 = 0.12.2 =
 The connector's preflight check now says plainly when a site's database is up to date. No behaviour change; existing workflows are unaffected.
@@ -102,9 +108,3 @@ Runs cut off by the server no longer stay "running" forever: they are retried or
 
 = 0.10.0 =
 Requires PHP 8.1. Retries now actually run (for steps set to on_error "retry") and resume where they failed; runs stranded by earlier versions are marked failed for replay. Adds stored credentials for HTTP steps.
-
-= 0.9.0 =
-Imports can map a photo URL per record; Post Runtime downloads each image once and sets it as the featured image (needs Post Runtime Engine 0.10.0+). Existing workflows are unaffected.
-
-
-
