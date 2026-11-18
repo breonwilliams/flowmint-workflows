@@ -343,12 +343,12 @@ class ScheduleMaintenanceTest extends UnitTestCase {
 		$this->assertArrayNotHasKey( 'fmw_maintenance_checked_version', $this->options, 'the stamp waits until a check actually ran' );
 	}
 
-	public function test_the_queued_reconcile_runs_the_reconcile() {
+	public function test_the_queued_reconcile_only_adds_missing_ticks() {
 		$listener = new \FMW_Schedule_Listener();
 		$listener->init();
 
 		$callbacks = $this->callbacks_for( \FMW_Schedule_Listener::RECONCILE_NOW_HOOK );
 		$this->assertCount( 1, $callbacks );
-		$this->assertSame( [ $listener, 'ensure_recurring_events_registered' ], $callbacks[0] );
+		$this->assertSame( [ $listener, 'add_missing_ticks' ], $callbacks[0], 'never the full reconcile, which would reset existing ticks' );
 	}
 }

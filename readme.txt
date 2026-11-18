@@ -60,7 +60,7 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 = 0.12.3 =
 * Fixed: page views no longer query Action Scheduler. FlowMint checks its two maintenance actions when the queue runs, on its own admin screens and once after an update, instead of on every request.
 * Fixed: those actions could be scheduled several times over, and the copies never went away. FlowMint now keeps exactly one of each and removes extras on the first request after updating.
-* Fixed: after a reactivation, a scheduler reset or a restore, scheduled workflows are rescheduled straight away instead of up to a day later.
+* Fixed: after a reactivation, a scheduler reset or a restore, scheduled workflows are rescheduled straight away instead of up to a day later. Workflows that are still scheduled keep their next run time.
 * Fixed: the release ZIP's class map listed 37,000 deleted files and was loaded on every request; a page view now fits in a 40M memory limit.
 
 = 0.12.2 =
@@ -92,7 +92,7 @@ and on the GitHub releases page.
 == Upgrade Notice ==
 
 = 0.12.3 =
-Removes two database queries from every page view, cleans up duplicated scheduled maintenance tasks, and cuts the plugin's memory use. Existing workflows are unaffected.
+Removes two database queries from every page view, cleans up duplicated maintenance tasks and cuts memory use. Scheduled workflows keep their next run times; any that lost their schedule get it back.
 
 = 0.12.2 =
 The connector's preflight check now says plainly when a site's database is up to date. No behaviour change; existing workflows are unaffected.

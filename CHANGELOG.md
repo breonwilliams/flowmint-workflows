@@ -32,10 +32,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   reset or a restore.** Deactivating FlowMint unschedules every FlowMint
   action, and until now ticks were rebuilt only by the daily reconcile, up to
   a day later. When the daily reconcile has to be scheduled again, a one-off
-  reconcile (`fmw_reconcile_scheduled_events_now`) now runs through Action
-  Scheduler in the same queue run. The first check after updating to this
-  version queues one as well, for sites that lost their ticks under an
-  earlier version.
+  pass (`fmw_reconcile_scheduled_events_now`) now runs through Action
+  Scheduler in the same queue run and adds any missing tick. The first check
+  after updating to this version queues one as well, for sites that lost
+  their ticks under an earlier version. It only adds: a tick that exists
+  keeps its ID and its next run, so an update never delays a scheduled
+  workflow.
 - **The check can never stop a queue run.** It runs as each Action
   Scheduler queue run starts, so an error from the data store would have
   stopped that run for every plugin, and the next. A missing `fmw` group

@@ -45,12 +45,12 @@ class FMW_Schedule_Listener {
     const RECONCILE_HOOK = 'fmw_reconcile_scheduled_events';
 
     /**
-     * One-off async action that runs the reconciliation now. Queued by
-     * FMW_Schedule_Maintenance when the daily action had to be scheduled
-     * again, because whatever removed it (a reactivation, an Action
-     * Scheduler table reset, a restore) usually removed the per-workflow
-     * ticks too. A separate hook so it never counts as a copy of the daily
-     * action.
+     * One-off async action that adds any missing ticks now (see
+     * add_missing_ticks()). Queued by FMW_Schedule_Maintenance once after
+     * each update and when the daily action had to be scheduled again,
+     * because whatever removed it (a reactivation, an Action Scheduler table
+     * reset, a restore) usually removed the per-workflow ticks too. A
+     * separate hook so it never counts as a copy of the daily action.
      *
      * @since 0.12.3
      */
@@ -76,7 +76,7 @@ class FMW_Schedule_Listener {
 
         // Daily reconciliation — drift correction.
         add_action( self::RECONCILE_HOOK, [ $this, 'ensure_recurring_events_registered' ], 10, 0 );
-        add_action( self::RECONCILE_NOW_HOOK, [ $this, 'ensure_recurring_events_registered' ], 10, 0 );
+        add_action( self::RECONCILE_NOW_HOOK, [ $this, 'add_missing_ticks' ], 10, 0 );
     }
 
     // -----------------------------------------------------------------
@@ -170,6 +170,41 @@ class FMW_Schedule_Listener {
             'recurring_events_dropped' => $unscheduled,
             'recurring_events_added'   => $rescheduled,
         ] );
+    }
+
+    /**
+     * Give every enabled scheduled workflow that has no tick one, and touch
+     * nothing else.
+     *
+     * Runs through RECONCILE_NOW_HOOK. An existing tick keeps its ID and its
+     * next run: replacing it would push an hourly workflow due in ten
+     * minutes an hour out, and a twice-daily one twelve hours, on every
+     * update. Correcting ticks that no longer match is the daily
+     * reconcile's job.
+     *
+     * @since 0.12.3
+     */
+    public function add_missing_ticks() {
+        if ( ! function_exists( 'as_schedule_recurring_action' ) ) {
+            return;
+        }
+
+        $added = 0;
+        foreach ( FMW_Workflow_Repository::get_all_by_trigger_type( 'schedule' ) as $row ) {
+            $workflow = new FMW_Workflow( $row );
+            if ( ! $workflow->is_enabled() ) {
+                continue;
+            }
+            // schedule_for_workflow() returns early when a pending or
+            // running tick exists.
+            if ( as_has_scheduled_action( self::TICK_HOOK, [ $workflow->id() ], self::ACTION_GROUP ) ) {
+                continue;
+            }
+            $this->schedule_for_workflow( $workflow );
+            $added++;
+        }
+
+        FMW_Logger::info( 'Added missing scheduled workflow ticks', [ 'ticks_added' => $added ] );
     }
 
     // -----------------------------------------------------------------
