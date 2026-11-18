@@ -55,8 +55,14 @@ class ScheduleMaintenanceGraceTest extends UnitTestCase {
 				if ( $a['hook'] !== $args['hook'] || ! in_array( $a['status'], (array) $args['status'], true ) ) {
 					continue;
 				}
-				if ( isset( $args['modified'] ) && $a['modified'] < (int) $args['modified'] ) {
-					continue;
+				// Like Action Scheduler: modified_compare defaults to '<='.
+				if ( isset( $args['modified'] ) ) {
+					$op = $args['modified_compare'] ?? '<=';
+					$m  = (int) $args['modified'];
+					$ok = '>=' === $op ? $a['modified'] >= $m : ( '>' === $op ? $a['modified'] > $m : ( '<' === $op ? $a['modified'] < $m : $a['modified'] <= $m ) );
+					if ( ! $ok ) {
+						continue;
+					}
 				}
 				$ids[] = $id;
 			}

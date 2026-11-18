@@ -111,7 +111,8 @@ class ScheduleMaintenanceTest extends UnitTestCase {
 				if ( $statuses && ! in_array( $a['status'], $statuses, true ) ) {
 					continue;
 				}
-				if ( isset( $args['modified'] ) && $a['modified'] < (int) $args['modified'] ) {
+				// Like Action Scheduler: modified_compare defaults to '<='.
+				if ( isset( $args['modified'] ) && ! self::compare( $a['modified'], $args['modified_compare'] ?? '<=', (int) $args['modified'] ) ) {
 					continue;
 				}
 				$ids[] = $id;
@@ -143,6 +144,24 @@ class ScheduleMaintenanceTest extends UnitTestCase {
 	protected function tear_down() {
 		unset( $GLOBALS['__fmw_fake_as_store'] );
 		parent::tear_down();
+	}
+
+	/** Action Scheduler's date comparison operators. */
+	public static function compare( $value, $operator, $against ) {
+		switch ( $operator ) {
+			case '=':
+				return $value === $against;
+			case '!=':
+				return $value !== $against;
+			case '>':
+				return $value > $against;
+			case '>=':
+				return $value >= $against;
+			case '<':
+				return $value < $against;
+			default:
+				return $value <= $against;
+		}
 	}
 
 	private function seed( $id, $hook, $status = 'pending', $due_in = 3600, array $args = [], $modified_ago = 7200 ) {
