@@ -89,6 +89,26 @@ if [ -f "${TEMP_DIR}/composer.json" ]; then
     echo "Installing production composer dependencies..."
     cd "${TEMP_DIR}"
     composer install --no-dev --optimize-autoloader --quiet
+
+    # Write the class map again now that the Google client's cleanup script
+    # (post-install-cmd) has removed every API service except Drive.
+    # Composer writes the optimized class map BEFORE running that script,
+    # so until 0.12.3 the ZIP shipped a 6.8 MB map with 38,285 entries,
+    # 37,707 of them for files the script had just deleted. Every request
+    # to the site loads that map. Measured on a page view with only
+    # Promptless Forms and FlowMint active: FlowMint added 25 MB of peak
+    # memory with the stale map and 3 MB without it (no opcache), and at
+    # memory_limit=40M the page died with the stale map even with opcache
+    # on (8.5 MB peak without it). Now 579 entries.
+    composer dump-autoload --no-dev --optimize --quiet
+
+    # Refuse to ship a class map that names files the ZIP does not contain.
+    php -r '
+        $map = require "vendor/composer/autoload_classmap.php";
+        $missing = array_filter( $map, function ( $f ) { return ! file_exists( $f ); } );
+        printf( "Class map: %d entries, %d missing files\n", count( $map ), count( $missing ) );
+        exit( $missing ? 1 : 0 );
+    ' || { echo "Error: the class map lists files that are not in the build."; exit 1; }
     cd - > /dev/null
 fi
 

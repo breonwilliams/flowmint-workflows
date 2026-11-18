@@ -32,6 +32,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   a day later. When the daily reconcile has to be scheduled again, a one-off
   reconcile (`fmw_reconcile_scheduled_events_now`) now runs through Action
   Scheduler in the same queue run.
+- **The release ZIP's class map lists only files it contains, and a page
+  view fits in a 40M memory limit again.** Composer writes the optimized
+  class map before the Google client's cleanup script removes every API
+  service except Drive, so 0.12.2 shipped a 6.8 MB map of 38,285 classes,
+  37,707 of them deleted files, and every request loaded it. On a page view
+  with only Promptless Forms and FlowMint active, FlowMint added 25 MB of
+  peak memory with it and 3 MB without it; at `memory_limit=40M` the page
+  failed with it even with opcache on, and peaked at 8.5 MB without it.
+  `bin/build-release.sh` now writes the class map again after the cleanup
+  (579 entries) and refuses to build if any entry names a missing file. The
+  ZIP drops from 2.6 MB to 1.8 MB; no other file changes.
 
 ### Changed
 
