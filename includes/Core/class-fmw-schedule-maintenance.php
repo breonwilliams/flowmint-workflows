@@ -245,15 +245,27 @@ class FMW_Schedule_Maintenance {
         }
 
         // Ended moments ago: its runner may be scheduling the next copy
-        // right now (cause 2 in the class comment).
+        // right now (cause 2 in the class comment) — unless a later copy
+        // already exists. A later copy that was then cancelled (a
+        // deactivation does that) means the repeat already happened and
+        // nothing is coming.
         $recent = self::find( $hook, [
             'status'           => [ ActionScheduler_Store::STATUS_COMPLETE, ActionScheduler_Store::STATUS_FAILED ],
             'modified'         => time() - self::RESCHEDULE_GRACE,
             'modified_compare' => '>=',
-            'per_page'         => 1,
+            'per_page'         => self::MAX_LISTED,
         ] );
         if ( $recent ) {
-            return false;
+            $cancelled = self::find( $hook, [
+                'status'   => ActionScheduler_Store::STATUS_CANCELED,
+                'per_page' => self::MAX_LISTED,
+                'orderby'  => 'date',
+                'order'    => 'DESC',
+            ] );
+            $repeated = $cancelled && max( array_map( 'intval', $cancelled ) ) > max( array_map( 'intval', $recent ) );
+            if ( ! $repeated ) {
+                return false;
+            }
         }
 
         // `unique` makes Action Scheduler insert only if no pending or
