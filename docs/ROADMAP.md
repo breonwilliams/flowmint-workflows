@@ -8,7 +8,7 @@ FlowMint Workflows turns FormEngine submissions into multi-step automation pipel
 
 ## Why this is being built
 
-The 725 Print Lab project consumed ~24+ hours of development time mostly because Zapier's UI is opaque to AI tools. Every workflow change requires Chrome MCP UI clicking. Every new client repeats the same friction. Three architectural patterns drive the alternative:
+The first client project (a print shop's quote workflows) consumed ~24+ hours of development time mostly because Zapier's UI is opaque to AI tools. Every workflow change requires Chrome MCP UI clicking. Every new client repeats the same friction. Three architectural patterns drive the alternative:
 
 1. **Workflow-as-data.** JSON definitions instead of UI-built configurations. Claude generates them in seconds via MCP.
 2. **Steps-as-code.** A library of reusable PHP classes (one per step type) that compose into any workflow.
@@ -26,14 +26,14 @@ Result: new client workflows take 1-2 hours instead of 24+. No recurring Zapier 
 - REST API + MCP tools for workflow CRUD and run history
 - FlowMint-internal admin UI: run history list, run details, manual replay, settings
 - Slack/email notifications to FlowMint when workflows fail
-- 725 Print Lab migration as the v1.0 acceptance test (Bulk + Small workflows running in production via FlowMint Workflows, Zapier decommissioned)
+- The first client migration as the v1.0 acceptance test (Bulk + Small workflows running in production via FlowMint Workflows, Zapier decommissioned)
 - Production-grade: structured logging, error handling, idempotency for state-changing steps, test coverage >80%
 - Comprehensive documentation in `docs/`
 
 ### Explicitly out of scope for v1.0
 
 - **Visual workflow builder UI.** Workflows are created via MCP or REST. No drag-and-drop editor.
-- **Client-facing admin UI.** End clients (Roderick, future clients) never see the workflow layer. FlowMint operates it.
+- **Client-facing admin UI.** End clients (the shop owner, future clients) never see the workflow layer. FlowMint operates it.
 - **Multi-tenant SaaS.** Each client has their own WordPress install with their own copy of the plugin.
 - **Synchronous workflow execution.** All workflows are async. If a use case requires sub-second response, this plugin is the wrong tool.
 - **Visual workflow monitoring dashboards (Grafana-style).** Run history table is enough for v1; richer dashboards deferred.
@@ -51,7 +51,7 @@ These deferred features can be added in v2+ as need arises. The architecture lea
 
 ### v0.6.0 — Scheduled workflow triggers (2026-05-13)
 
-The 725 Print Lab production deployment surfaced a use case the v1.0 ROADMAP had explicitly deferred: a daily workflow to purge old FRE entries from the WordPress database. Rather than hardcode a one-off "retention" feature, v0.6.0 delivers the proper underlying capability — workflows can now be triggered on a recurring schedule (hourly / twice-daily / daily / weekly), reusable by any future client who needs periodic syncs, scheduled reports, or maintenance jobs. The retention workflow is just the first consumer.
+The first production deployment surfaced a use case the v1.0 ROADMAP had explicitly deferred: a daily workflow to purge old FRE entries from the WordPress database. Rather than hardcode a one-off "retention" feature, v0.6.0 delivers the proper underlying capability — workflows can now be triggered on a recurring schedule (hourly / twice-daily / daily / weekly), reusable by any future client who needs periodic syncs, scheduled reports, or maintenance jobs. The retention workflow is just the first consumer.
 
 Adds two FormEngine step types — `fre_list_entries` and `fre_delete_entries` — and a parallel trigger path (`Action Scheduler recurring event → FMW_Schedule_Listener → executor`) that shares the existing executor, run history, and retry policy. Form-triggered workflows are completely unaffected.
 
@@ -61,12 +61,12 @@ Documentation: `docs/DESIGN_SCHEDULED_TRIGGERS.md` (engineering contract), `docs
 
 A v1.0 release is shippable when ALL of the following are true:
 
-1. **725 Print Lab is fully migrated.** Both Bulk and Small workflows run in production via FlowMint Workflows. The corresponding Zaps are turned off and the Zapier subscription canceled.
-2. **Functional equivalence verified.** The 725 workflows produce the same outputs as the previous Zapier setup: same Drive folder structure, same Printavo Quote fields, same email content, same FormEngine entry cleanup. Verified by parallel run for at least 5 real submissions.
+1. **The first client is fully migrated.** Both Bulk and Small workflows run in production via FlowMint Workflows. The corresponding Zaps are turned off and the Zapier subscription canceled.
+2. **Functional equivalence verified.** The client's workflows produce the same outputs as the previous Zapier setup: same Drive folder structure, same Printavo Quote fields, same email content, same FormEngine entry cleanup. Verified by parallel run for at least 5 real submissions.
 3. **Failure recovery works.** A deliberately failed workflow run (e.g., Drive API outage simulated) shows up in the admin UI as failed, sends a notification to FlowMint, and can be manually replayed once the dependency recovers.
 4. **MCP tool surface is complete.** Claude can list/create/update/delete workflows, view run history, replay failed runs, and introspect available step types — all without touching the admin UI.
 5. **Documentation is complete.** A new developer (or new Claude session) can read `CLAUDE.md` + `docs/` and understand what the plugin does, how it integrates with FormEngine, how to add a new step type, and how to onboard a new client.
-6. **Test coverage > 80%.** Unit tests for each step type. Integration tests for critical paths (a full 725-style workflow end-to-end with real Drive + Printavo sandboxes).
+6. **Test coverage > 80%.** Unit tests for each step type. Integration tests for critical paths (a full quote-request workflow end-to-end with real Drive + Printavo sandboxes).
 7. **Security reviewed.** API credentials encrypted at rest. No PII in logs. Capability checks on all admin endpoints. Nonces on form-driven actions.
 8. **Performance verified.** A workflow with 10 steps completes within 30 seconds end-to-end under normal conditions. Action Scheduler queue depth stays under 100 jobs at peak.
 
@@ -78,7 +78,7 @@ A v1.0 release is shippable when ALL of the following are true:
 | 1 | Foundation | 14 | 17 | Engine, runner, DB, connector, MCP, 5 base steps |
 | 2 | Drive + Email | 10 | 27 | Drive integration, email steps, file handling |
 | 3 | Printavo + HTTP | 8 | 35 | Printavo GraphQL client, HTTP steps |
-| 4 | 725 migration | 6 | 41 | 725 workflows, parallel run, cutover |
+| 4 | First client migration | 6 | 41 | Client workflows, parallel run, cutover |
 | 5 | Production polish | 12 | 53 | Admin UI, notifications, observability, tests, docs |
 
 Total estimate: **~53 hours of focused development** to ship v1.0.
@@ -96,7 +96,7 @@ This is within the "polished 60-80 hour v1" budget agreed during planning, with 
 - All design docs in `docs/` (this is one of them)
 - Empty `includes/` subfolders ready for Phase 1 to fill in
 
-**Exit criteria:** Breon has reviewed all docs in `docs/` and signed off on the design. Any disagreements resolved by editing the docs (the docs are the contract; if the docs are wrong, code that follows them will also be wrong).
+**Exit criteria:** The owner has reviewed all docs in `docs/` and signed off on the design. Any disagreements resolved by editing the docs (the docs are the contract; if the docs are wrong, code that follows them will also be wrong).
 
 ### Phase 1 — Foundation (14 hours)
 
@@ -163,7 +163,7 @@ This is within the "polished 60-80 hour v1" budget agreed during planning, with 
 
 ### Phase 3 — Printavo + HTTP integrations (8 hours)
 
-**Goal:** Add Printavo (for 725 Print Lab) and generic HTTP steps (for any future client whose CRM/tool we haven't built a dedicated connector for).
+**Goal:** Add Printavo (for the first client, a print shop) and generic HTTP steps (for any future client whose CRM/tool we haven't built a dedicated connector for).
 
 **Deliverables:**
 - `includes/Connectors/class-fmw-printavo-client.php` — Printavo GraphQL client (auth, query execution, error handling, rate limit awareness)
@@ -182,21 +182,21 @@ This is within the "polished 60-80 hour v1" budget agreed during planning, with 
 
 **Exit criteria:** A workflow that finds-or-creates a Printavo customer and creates a Quote runs end-to-end against the Printavo sandbox.
 
-### Phase 4 — 725 Print Lab migration (6 hours)
+### Phase 4 — First client migration (6 hours)
 
-**Goal:** Replace 725's Zapier-based workflows with FlowMint Workflows definitions. Decommission Zapier.
+**Goal:** Replace the first client's Zapier-based workflows with FlowMint Workflows definitions. Decommission Zapier.
 
 **Deliverables:**
-- Workflow JSON definitions in `725 Print Lab/_FlowMint-Workflows-Migration/`:
+- Workflow JSON definitions in the client's own folder (kept outside the plugin repo):
   - `bulk-order-quote.json` — full Bulk workflow (10 steps)
   - `small-order-request.json` — full Small workflow (10 steps)
 - Parallel run setup: FE webhook fires Zapier AND FlowMint Workflows simultaneously for verification period
 - Verification checklist: 5+ real submissions confirmed equivalent in both systems
 - Cutover: FE webhook switched from Zapier URL to internal action (FormEngine doesn't even need to fire a webhook anymore — FlowMint Workflows listens to the action directly)
 - Zapier subscription cancellation
-- Documentation: `docs/MIGRATION_FROM_ZAPIER.md` updated with 725 as worked example
+- Documentation: `docs/MIGRATION_FROM_ZAPIER.md` updated with this migration as the worked example
 
-**Exit criteria:** 725 production form submissions are processed exclusively by FlowMint Workflows, no Zapier involvement, equivalent outputs verified.
+**Exit criteria:** The client's production form submissions are processed exclusively by FlowMint Workflows, no Zapier involvement, equivalent outputs verified.
 
 ### Phase 5 — Production polish (12 hours)
 
@@ -223,18 +223,18 @@ This is within the "polished 60-80 hour v1" budget agreed during planning, with 
 
 **Exit criteria:** All success criteria from the top of this doc are met. v1.0 is tagged.
 
-## Migration plan for 725 Print Lab
+## Migration plan for the first client
 
 Phase 4 is the migration itself. Approach:
 
-1. **Pre-flight:** All FlowMint Workflows phases 0-3 complete. 725's existing Zaps still running production traffic.
-2. **Parallel run setup:** Configure 725's FE form to ALSO fire on `fre_submission_complete` to FlowMint Workflows (not just to the Zapier webhook). Both systems process the same submission.
+1. **Pre-flight:** All FlowMint Workflows phases 0-3 complete. The client's existing Zaps still running production traffic.
+2. **Parallel run setup:** Configure the client's FE form to ALSO fire on `fre_submission_complete` to FlowMint Workflows (not just to the Zapier webhook). Both systems process the same submission.
 3. **Verification:** For 5-10 real submissions over a few days, manually compare:
    - FormEngine entry deletion timing (both should delete the entry)
    - Drive folder + file equivalence (FlowMint creates a separate folder during parallel run, named `[FMW-PARALLEL] {original folder name}` to avoid collision)
    - Printavo Quote equivalence (FlowMint creates a separate Quote during parallel run, prefixed `[FMW]` for visibility)
    - Email equivalence (FlowMint sends to a different test address during parallel run)
-4. **Sign-off:** Roderick or Breon confirms FlowMint outputs are equivalent or better than Zapier.
+4. **Sign-off:** The shop owner or the plugin owner confirms FlowMint outputs are equivalent or better than Zapier.
 5. **Cutover:** Disable the Zapier webhook on the FE form (`webhook_enabled: false`). FlowMint Workflows is now the sole processor. FlowMint switches its workflow config from "parallel mode" (separate folder/quote/email targets) to "production mode" (real folder/quote/email targets).
 6. **Decommission:** Turn off the Zapier Zaps. Cancel the Zapier subscription after 30 days of clean FlowMint operation.
 
@@ -271,4 +271,4 @@ The second most important property: **workflow JSON is forward-compatible**. v1.
 
 ---
 
-**Phase 0 status:** in progress. This document is part of the deliverable. Other docs in this folder elaborate the design specifics. After Breon reviews and signs off on the design, Phase 1 begins.
+**Phase 0 status:** in progress. This document is part of the deliverable. Other docs in this folder elaborate the design specifics. After the owner reviews and signs off on the design, Phase 1 begins.

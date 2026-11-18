@@ -31,13 +31,17 @@ class FMW_Workflow_Job {
         // A run the server killed part-way — PHP's time limit, a fatal error,
         // memory — never reaches the catch blocks in handle(), so until 0.11.0
         // it stayed "running" for good: no retry, no failure alert, and none
-        // of the steps after the one that was cut off (for 725 Print Lab: no
-        // quote email to the shop). Action Scheduler reports such deaths; the
+        // of the steps after the one that was cut off (on a production install
+        // with a quote workflow: no quote email to the team). Action Scheduler
+        // reports such deaths; the
         // hourly sweep catches the ones it cannot (a process killed outright).
         add_action( 'action_scheduler_unexpected_shutdown', [ __CLASS__, 'on_action_died' ], 10, 1 );
         add_action( 'action_scheduler_failed_execution', [ __CLASS__, 'on_action_died' ], 10, 1 );
         add_action( self::SWEEP_HOOK, [ __CLASS__, 'sweep_interrupted_runs' ] );
-        add_action( 'action_scheduler_init', [ __CLASS__, 'schedule_sweep' ] );
+
+        // Keeps the hourly sweep and the daily reconcile scheduled, exactly
+        // once each, without a query on every page view.
+        FMW_Schedule_Maintenance::register();
     }
 
     /**
@@ -49,17 +53,6 @@ class FMW_Workflow_Job {
      * Seconds a run may stay "running" before the sweep treats it as interrupted.
      */
     const INTERRUPTED_AFTER = 1800;
-
-    /**
-     * Schedule the hourly sweep once (group fmw, so deactivation and
-     * uninstall remove it with every other FlowMint action).
-     */
-    public static function schedule_sweep() {
-        if ( ! function_exists( 'as_has_scheduled_action' ) || as_has_scheduled_action( self::SWEEP_HOOK, [], 'fmw' ) ) {
-            return;
-        }
-        as_schedule_recurring_action( time() + HOUR_IN_SECONDS, HOUR_IN_SECONDS, self::SWEEP_HOOK, [], 'fmw' );
-    }
 
     /**
      * Action Scheduler reports that an action died (fatal error, time limit)

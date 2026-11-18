@@ -23,7 +23,7 @@ The downside: service accounts have their own Drive quota (15GB free) — for cl
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Click the project dropdown at top → "New Project"
-3. Name: `flowmint-<client-slug>` (e.g., `flowmint-725-print-lab`)
+3. Name: `flowmint-<client-slug>` (e.g., `flowmint-example-client`)
 4. Click Create
 5. Wait for the project to provision (~30 seconds)
 
@@ -58,10 +58,10 @@ The file looks like:
 ```json
 {
   "type": "service_account",
-  "project_id": "flowmint-725-print-lab",
+  "project_id": "flowmint-example-client",
   "private_key_id": "...",
   "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
-  "client_email": "flowmint-workflows-prod@flowmint-725-print-lab.iam.gserviceaccount.com",
+  "client_email": "flowmint-workflows-prod@flowmint-example-client.iam.gserviceaccount.com",
   "client_id": "...",
   "auth_uri": "https://accounts.google.com/o/oauth2/auth",
   "token_uri": "https://oauth2.googleapis.com/token",
@@ -74,7 +74,7 @@ The file looks like:
 1. Open Drive in your browser
 2. Navigate to the folder where workflow files will be stored (the "workspace folder")
 3. Right-click → Share
-4. Add the service account email as an editor: `flowmint-workflows-prod@flowmint-725-print-lab.iam.gserviceaccount.com`
+4. Add the service account email as an editor: `flowmint-workflows-prod@flowmint-example-client.iam.gserviceaccount.com`
 5. Uncheck "Notify people" (it's a service account, no inbox)
 6. Click "Share"
 
@@ -87,7 +87,7 @@ The service account can now read and write within this folder.
 The folder ID is in the Drive URL when you have the folder open:
 
 ```
-https://drive.google.com/drive/folders/1aVp_Zhd0OyL5K_h9dNYQ_f6lf_VOC8K8
+https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz012345
                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
                                          this is the folder ID
 ```
@@ -142,10 +142,10 @@ Bind it to a test form that no live workflow uses — only one enabled workflow 
 
 ## Sharing strategy for client workspaces
 
-For 725 Print Lab specifically, the workspace folder structure is:
+For the first production install (a print shop with Bulk and Small quote workflows), the workspace folder structure is:
 
 ```
-725 Print Lab/
+Example Shop/
 ├── Bulk/
 │   ├── 2026-05/
 │   ├── 2026-06/
@@ -153,13 +153,13 @@ For 725 Print Lab specifically, the workspace folder structure is:
 ├── Small/
 │   ├── 2026-05/
 │   └── ...
-└── (other 725 internal folders)
+└── (other internal folders)
 ```
 
-The service account is shared on the `725 Print Lab/` folder (and inherits to children). This means:
+The service account is shared on the `Example Shop/` folder (and inherits to children). This means:
 
 - New per-month folders are created INSIDE the existing structure
-- Service account doesn't have access to anything outside `725 Print Lab/`
+- Service account doesn't have access to anything outside `Example Shop/`
 - The Drive folder structure mirrors the team's existing organization
 
 Each new client should follow the same pattern: dedicate a top-level folder, share it with the service account, reference the folder ID in workflow definitions.
@@ -180,7 +180,7 @@ Service accounts have their own free 15GB quota. For high-volume clients:
 - Make sure files are uploaded INTO a folder owned by the client's Google Workspace, not the service account itself (sharing inverts ownership in shared drives)
 - Or: enable a paid Google Workspace plan and use a Shared Drive (service account quota doesn't apply in shared drives)
 
-For 725 Print Lab and most service businesses, the free quota is sufficient (workflow files are small — design files are typically <50MB and get cleaned up periodically).
+For a print shop's quote workflows and most service businesses, the free quota is sufficient (workflow files are small — design files are typically <50MB and get cleaned up periodically).
 
 ### Authentication errors after a long period
 

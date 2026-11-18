@@ -185,7 +185,7 @@ These are documented in detail in `docs/ARCHITECTURE.md`. Quick summary:
 ## Critical guardrails for AI sessions working on this plugin
 
 - **Plugin is IN PRODUCTION (v0.6.4, 725 Print Lab live).** Changes must not break running workflows: existing form-triggered workflows and their JSON configs are a compatibility contract. Schema changes require an `FMW_DB_VERSION` bump with an idempotent migration; step-config shape changes require normalization for stored definitions.
-- **Do not modify FormEngine to integrate with this plugin.** FormEngine should not know FlowMint Workflows exists. Use only documented FRE hooks (`pforms_submission_complete`, `pforms_entry_created`, etc. — `pforms_*` since FRE 1.8.0) and public classes (`PForms_Entry`).
+- **Do not modify FormEngine to integrate with this plugin.** FormEngine should not know FlowMint Workflows exists. Use only the FormEngine surfaces listed in `docs/INTEGRATION_FRE.md` ("Classes", "Hooks", "Filters"; `pforms_*` / `PForms_*` since FRE 1.8.0), each behind its `class_exists` / `function_exists` / `defined` check, and add any new one to that list (and to `RELEASE.md`) in the same change.
 - **Workflow JSON is the source of truth, not PHP files.** Workflow definitions live in the DB, created via the connector REST API or MCP tools. PHP "workflow definitions" only exist in tests and reference examples.
 - **Steps must be deterministic for a given context.** A step's execution should depend only on its config and the current run context. No global state, no static caches that survive across runs.
 - **Async execution is mandatory.** Never block the form submission to wait for workflow completion. Action Scheduler is the only execution path in v1.

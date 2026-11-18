@@ -1,7 +1,7 @@
 # Troubleshooting & Gotchas (First-Deployment Lessons)
 
-Captured during the first FMW production deployment (725 Print Lab,
-2026-05-03 → 2026-05-04). Each entry below cost real cycles to discover —
+Captured during the first FMW production deployment (a print shop running
+two quote-request workflows, 2026-05-03 → 2026-05-04). Each entry below cost real cycles to discover —
 read this BEFORE adding a new connector, debugging a "but it works locally"
 issue, or onboarding a new client.
 
@@ -176,8 +176,8 @@ is final at once: **Failed**, alerted, replayable.
 
 A step without it fails the run on the first Drive 503 or timeout, and a
 failed run stops there: every later step is skipped, including the email
-that tells the shop a quote arrived. Measured on a copy of 725 Print Lab's
-quote workflow (2026-09-21): one Drive 503 on the artwork upload, without
+that tells the shop a quote arrived. Measured on a copy of the first production
+install's quote workflow (2026-09-21): one Drive 503 on the artwork upload, without
 `retry`, left a Failed run and no shop email; with `retry` the run resumed
 at the upload a minute later and finished. Leave `send_email` steps and
 `log_*` steps on the default; for a customer acknowledgement use
@@ -239,7 +239,7 @@ Composer can autoload AS classes. Workflows queue but never dispatch.
 ### Drive folder owned-by-service-account doesn't appear in regular Drive search
 
 When the service account creates a folder inside a parent that's owned by
-a real user (e.g., Roderick's My Drive), the new folder is OWNED by the
+a real user (e.g., the shop owner's My Drive), the new folder is OWNED by the
 service account. The user's Drive UI shows it inside the parent (because
 the parent is theirs), but Drive's search box defaults to "My Drive" only
 and excludes service-account-owned items.

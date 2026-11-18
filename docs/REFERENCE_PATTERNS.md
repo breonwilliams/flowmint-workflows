@@ -2,7 +2,7 @@
 
 Anonymized worked examples showing how to compose the step library into common service-business workflows. These patterns are vendor-neutral — adapt the specific Drive folder IDs, Printavo IDs, and email templates to your client.
 
-For the EXACT 725 Print Lab workflow definitions, see the client folder at `725 Print Lab/_FlowMint-Workflows-Migration/` (not in the plugin repo — kept separate so the plugin stays generic).
+For the exact workflow definitions of a real deployment, see the client's own folder, kept outside the plugin repo so the plugin stays generic.
 
 ## Pattern 1: Quote-request pipeline (print shop, design agency, custom manufacturer)
 
@@ -125,11 +125,11 @@ DRIVE FOLDER
 {{ steps.submission_folder.web_view_link }}
 ```
 
-This pattern matches 725 Print Lab's Bulk and Small workflows almost 1:1. For 725, swap in:
-- `<DRIVE_PARENT_FOLDER_ID>` → `1aVp_Zhd0OyL5K_h9dNYQ_f6lf_VOC8K8` (Bulk) or `1jY34wAy_E5Kuii7AAIaL3tqH8GPO7UmF` (Small)
-- `<SALES_REP_USER_ID>` → `60522` (Alexis Lilly)
-- `<QUOTE_INQUIRY_STATUS_ID>` → `416419` (Quote - JotForm Inquiry)
-- `<ORDERS_EMAIL>` → `orders@725printlab.com`
+This pattern matches the first production install's Bulk and Small workflows (a print shop) almost 1:1. For that install, the values look like:
+- `<DRIVE_PARENT_FOLDER_ID>` → `1AbCdEfGhIjKlMnOpQrStUvWxYz012345` (Bulk) or `1ZyXwVuTsRqPoNmLkJiHgFeDcBa543210` (Small)
+- `<SALES_REP_USER_ID>` → `123456` (the sales rep)
+- `<QUOTE_INQUIRY_STATUS_ID>` → `654321` (the shop's quote-inquiry status)
+- `<ORDERS_EMAIL>` → `orders@example.com`
 
 ## Pattern 2: Lead capture with CRM sync (HVAC, plumbing, roofing, lawn care)
 

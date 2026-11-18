@@ -248,8 +248,8 @@ List all workflows. Paginated.
   "success": true,
   "data": [
     {
-      "id": "725-bulk-order-quote",
-      "title": "725 Bulk Order → Printavo + Drive",
+      "id": "bulk-order-quote",
+      "title": "Bulk Order → Printavo + Drive",
       "form_id": "bulk-order-quote",
       "enabled": true,
       "managed_by": "connector:cowork",
@@ -273,8 +273,8 @@ Get a single workflow including its full config.
 {
   "success": true,
   "data": {
-    "id": "725-bulk-order-quote",
-    "title": "725 Bulk Order → Printavo + Drive",
+    "id": "bulk-order-quote",
+    "title": "Bulk Order → Printavo + Drive",
     "form_id": "bulk-order-quote",
     "enabled": true,
     "config": "{\"version\":\"1.0\",\"steps\":[...]}",
@@ -295,8 +295,8 @@ Create a new workflow.
 **Request body:**
 ```json
 {
-  "id": "725-bulk-order-quote",
-  "title": "725 Bulk Order → Printavo + Drive",
+  "id": "bulk-order-quote",
+  "title": "Bulk Order → Printavo + Drive",
   "form_id": "bulk-order-quote",
   "enabled": true,
   "config": "{\"version\":\"1.0\",\"steps\":[...]}"
@@ -323,7 +323,7 @@ Not checked: steps nested inside `conditional` (`then`/`else`) or `try_catch` (`
 {
   "success": true,
   "data": {
-    "id": "725-bulk-order-quote",
+    "id": "bulk-order-quote",
     "managed_by": "connector:cowork",
     "connector_version": 1,
     ...
@@ -382,7 +382,7 @@ List workflow runs. Paginated.
   "data": [
     {
       "id": 42,
-      "workflow_id": "725-bulk-order-quote",
+      "workflow_id": "bulk-order-quote",
       "form_id": "bulk-order-quote",
       "entry_id": 5,
       "status": "completed",
@@ -407,7 +407,7 @@ Full run detail including all step results.
   "success": true,
   "data": {
     "id": 42,
-    "workflow_id": "725-bulk-order-quote",
+    "workflow_id": "bulk-order-quote",
     "form_id": "bulk-order-quote",
     "entry_id": 5,
     "status": "completed",
@@ -429,7 +429,7 @@ Full run detail including all step results.
         "completed_at": "...",
         "duration_ms": 1240,
         "config_snapshot": "{...}",
-        "output_snapshot": "{\"id\":\"10706641\",...}",
+        "output_snapshot": "{\"id\":\"1000001\",...}",
         "error_code": null,
         "error_message": null
       },

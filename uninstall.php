@@ -83,6 +83,7 @@ function fmw_uninstall_cleanup() {
 
     // One-time flags: rerun on reinstall.
     delete_option( 'fmw_reconciliation_bootstrapped' );
+    delete_option( 'fmw_maintenance_checked_version' );
     delete_option( 'fmw_repaired_runs' );
     delete_option( 'fmw_conditions_review_dismissed' );
 

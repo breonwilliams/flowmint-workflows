@@ -187,7 +187,7 @@ The workflow definitions registry.
 
 ```sql
 CREATE TABLE wp_fmw_workflows (
-  id              VARCHAR(64)  NOT NULL,         -- e.g., "725-bulk-order-quote"
+  id              VARCHAR(64)  NOT NULL,         -- e.g., "bulk-order-quote"
   title           VARCHAR(255) NOT NULL,
   form_id         VARCHAR(64)  NOT NULL,         -- references FRE form_id
   enabled         TINYINT(1)   NOT NULL DEFAULT 1,
@@ -284,7 +284,7 @@ A workflow definition's `config` field is JSON of this shape:
 ```json
 {
   "version": "1.0",
-  "title": "725 Bulk Order → Printavo + Drive",
+  "title": "Bulk Order → Printavo + Drive",
   "description": "Internal note: optional",
   "form_id": "bulk-order-quote",
   "enabled": true,
@@ -310,7 +310,7 @@ A workflow definition's `config` field is JSON of this shape:
       "name": "month_folder",
       "type": "drive_find_or_create_folder",
       "config": {
-        "parent_id": "1aVp_Zhd0OyL5K_h9dNYQ_f6lf_VOC8K8",
+        "parent_id": "1AbCdEfGhIjKlMnOpQrStUvWxYz012345",
         "name": "{{ now('Y-m') }}"
       }
     },
@@ -336,10 +336,10 @@ A workflow definition's `config` field is JSON of this shape:
       "type": "printavo_create_quote",
       "config": {
         "customer_id": "{{ steps.customer.id }}",
-        "user_id": 60522,
-        "invoice_status_id": 416419,
+        "user_id": 123456,
+        "invoice_status_id": 654321,
         "nickname": "{{ steps.submission_folder.name }}",
-        "description": "{{ template('725-bulk-quote-description') }}"
+        "description": "{{ template('bulk-quote-description') }}"
       }
     },
     {
@@ -348,9 +348,9 @@ A workflow definition's `config` field is JSON of this shape:
       "config": {
         "to": "{{ data.email }}",
         "from_name": "Orders Team",
-        "from_email": "orders@725printlab.com",
+        "from_email": "orders@example.com",
         "subject": "Thank You for Your Quote Request!",
-        "template": "725-customer-ack"
+        "template": "customer-ack"
       }
     },
     {
@@ -415,6 +415,8 @@ The executor and downstream code are unchanged. The only new path is the listene
 **Context for scheduled runs.** Scheduled runs have no FormEngine entry. The job handler recognizes `entry_id === 0` and skips the FE entry fetch, leaving `context.entry`, `context.data`, and `context.entry_files` as empty arrays. The interpolator silently resolves missing variables to empty string, so existing step implementations continue to work — but workflow authors should reference `vars.*`, `env.*`, or previous-step outputs (`steps.*`) rather than `data.*` / `entry.*` in scheduled workflows. The validator emits a warning at save time when a scheduled workflow's step configs reference entry-bound variables.
 
 **Reconciliation.** Per-workflow AS recurring events are registered when a workflow is saved (`fmw_workflow_saved` action), unregistered when it's disabled (`fmw_workflow_disabled`) or deleted (`fmw_workflow_deleted`). A daily `fmw_reconcile_scheduled_events` AS action sweeps the workflows table and brings AS state into sync with the DB — drift correction for the rare case where an event was lost or wiped.
+
+**Maintenance actions (0.12.3).** The daily reconcile and the hourly `fmw_sweep_interrupted_runs` are kept at exactly one pending copy each by `FMW_Schedule_Maintenance`, which checks at the start of every Action Scheduler queue run, on FlowMint's admin screens, and once per FlowMint version (an autoloaded stamp, deleted on activation). Page views make no Action Scheduler query. Each check also cancels all but the copy due soonest, and when the daily reconcile had to be scheduled again it queues a one-off `fmw_reconcile_scheduled_events_now` so ticks come back in the same queue run. Before 0.12.3 the check ran on every request and could create duplicates that never went away; the reasons are in the class docblock.
 
 See `DESIGN_SCHEDULED_TRIGGERS.md` for the full engineering contract, `SCHEDULED_WORKFLOWS.md` for the user-facing guide.
 
@@ -581,7 +583,7 @@ Each step can override the default error handling via `on_error`:
 ```php
 FMW_Logger::info('Workflow run started', [
     'run_id' => 123,
-    'workflow_id' => '725-bulk-order-quote',
+    'workflow_id' => 'bulk-order-quote',
     'entry_id' => 5,
 ]);
 ```
@@ -610,11 +612,13 @@ Admin UI shows:
 
 ### Activation
 
-`register_activation_hook()` runs:
-- Verifies FormEngine is active and version >= 1.6.0 (deactivate self with admin notice if not)
-- Creates DB tables (`wp_fmw_workflows`, `wp_fmw_workflow_runs`, `wp_fmw_workflow_run_steps`)
-- Schedules a daily housekeeping Action Scheduler job (cleanup old run records per retention policy)
-- Sets default options
+`register_activation_hook()` runs `FlowMint_Workflows::activate()`:
+- Creates DB tables (`wp_fmw_workflows`, `wp_fmw_workflow_runs`, `wp_fmw_workflow_run_steps`) and records `fmw_db_version`
+- Grants the `flowmint_manage_workflows` capability to the default roles
+- Stamps `fmw_activated_at`
+- Deletes `fmw_maintenance_checked_version` (0.12.3), so the next request schedules the maintenance actions again and adds any missing workflow ticks
+
+It does not check FormEngine and does not fail without it: the FormEngine check (`PForms_VERSION` 1.8.0+ or the `Promptless_Forms` class) runs on every load, and without FormEngine FMW shows an admin notice and starts none of its components. See `INTEGRATION_FRE.md`, "Version compatibility".
 
 ### Deactivation
 

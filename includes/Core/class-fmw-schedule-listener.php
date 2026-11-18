@@ -45,6 +45,18 @@ class FMW_Schedule_Listener {
     const RECONCILE_HOOK = 'fmw_reconcile_scheduled_events';
 
     /**
+     * One-off async action that adds any missing ticks now (see
+     * add_missing_ticks()). Queued by FMW_Schedule_Maintenance once after
+     * each update and when the daily action had to be scheduled again,
+     * because whatever removed it (a reactivation, an Action Scheduler table
+     * reset, a restore) usually removed the per-workflow ticks too. A
+     * separate hook so it never counts as a copy of the daily action.
+     *
+     * @since 0.12.3
+     */
+    const RECONCILE_NOW_HOOK = 'fmw_reconcile_scheduled_events_now';
+
+    /**
      * Action Scheduler group. Shared with the submission listener so
      * everything FMW-related is one bucket in the AS admin UI and the
      * housekeeping job.
@@ -64,6 +76,7 @@ class FMW_Schedule_Listener {
 
         // Daily reconciliation — drift correction.
         add_action( self::RECONCILE_HOOK, [ $this, 'ensure_recurring_events_registered' ], 10, 0 );
+        add_action( self::RECONCILE_NOW_HOOK, [ $this, 'add_missing_ticks' ], 10, 0 );
     }
 
     // -----------------------------------------------------------------
@@ -114,18 +127,27 @@ class FMW_Schedule_Listener {
     /**
      * Reconcile AS recurring events with the DB.
      *
-     * Iterates every workflow with trigger_type='schedule', unschedules
-     * any existing recurring event for it, then re-schedules if the
-     * workflow is enabled. This guarantees that:
+     * For every workflow with trigger_type='schedule':
      *
-     *   - Enabled scheduled workflows have exactly one recurring event.
-     *   - Disabled scheduled workflows have none.
-     *   - Workflows whose interval changed get the new interval applied.
+     *   - disabled: its ticks are unscheduled;
+     *   - enabled, with a pending tick that matches its schedule: that tick
+     *     stays, keeping its ID and its next run. Any other pending copies
+     *     are cancelled, keeping the matching one due soonest;
+     *   - enabled, with no tick or none that matches: its ticks are
+     *     replaced by one scheduled from the workflow's settings.
+     *
+     * "Matches" means a recurring tick whose interval is the workflow's,
+     * and, for daily and weekly workflows, whose next run falls at the
+     * configured time (and day) in the site's timezone. A tick that drifted
+     * (a daylight-saving change, an edit made outside the save hooks) is
+     * therefore corrected; one that is right is left alone.
+     *
+     * Until 0.12.3 every tick was cancelled and rescheduled from "now" each
+     * day. Hourly ticks restart at now + 1 hour and twice-daily ones at now
+     * + 12 hours, so hourly workflows lost up to an hour and twice-daily ones
+     * could miss a run, once a day on every install.
      *
      * Called daily via the RECONCILE_HOOK Action Scheduler action.
-     * Also called once at v0.6.0 bootstrap (see
-     * FlowMint_Workflows::maybe_schedule_reconciliation) so existing
-     * scheduled workflows pre-dating Phase 2's listener catch up.
      */
     public function ensure_recurring_events_registered() {
         if ( ! function_exists( 'as_schedule_recurring_action' ) ) {
@@ -135,28 +157,137 @@ class FMW_Schedule_Listener {
 
         $rows = FMW_Workflow_Repository::get_all_by_trigger_type( 'schedule' );
 
-        $reviewed     = 0;
-        $unscheduled  = 0;
-        $rescheduled  = 0;
+        $reviewed    = 0;
+        $unscheduled = 0;
+        $kept        = 0;
+        $replaced    = 0;
 
         foreach ( $rows as $row ) {
             $workflow = new FMW_Workflow( $row );
+            $reviewed++;
 
-            $unscheduled += $this->unschedule_for_workflow( $workflow->id() );
-
-            if ( $workflow->is_enabled() ) {
-                $this->schedule_for_workflow( $workflow );
-                $rescheduled++;
+            if ( ! $workflow->is_enabled() ) {
+                $unscheduled += $this->unschedule_for_workflow( $workflow->id() );
+                continue;
             }
 
-            $reviewed++;
+            $ticks = function_exists( 'as_get_scheduled_actions' ) ? as_get_scheduled_actions( [
+                'hook'     => self::TICK_HOOK,
+                'args'     => [ $workflow->id() ],
+                'group'    => self::ACTION_GROUP,
+                'status'   => 'pending',
+                'per_page' => 50,
+                'orderby'  => 'date',
+                'order'    => 'ASC',
+            ] ) : [];
+            $ticks = is_array( $ticks ) ? $ticks : [];
+
+            $keep = null;
+            foreach ( $ticks as $action_id => $action ) {
+                if ( $this->tick_matches( $workflow, $action ) ) {
+                    $keep = (int) $action_id;
+                    break;
+                }
+            }
+
+            if ( null === $keep ) {
+                $unscheduled += $this->unschedule_for_workflow( $workflow->id() );
+                $this->schedule_for_workflow( $workflow );
+                $replaced++;
+                continue;
+            }
+
+            foreach ( array_keys( $ticks ) as $action_id ) {
+                if ( (int) $action_id === $keep ) {
+                    continue;
+                }
+                try {
+                    ActionScheduler::store()->cancel_action( (int) $action_id );
+                    $unscheduled++;
+                } catch ( Throwable $e ) {
+                    // Already gone or claimed: nothing to cancel.
+                }
+            }
+            $kept++;
         }
 
         FMW_Logger::info( 'Reconciled scheduled workflow events', [
-            'workflows_reviewed'      => $reviewed,
+            'workflows_reviewed'       => $reviewed,
+            'ticks_kept'               => $kept,
+            'ticks_replaced'           => $replaced,
             'recurring_events_dropped' => $unscheduled,
-            'recurring_events_added'   => $rescheduled,
         ] );
+    }
+
+    /**
+     * Does a pending tick still match the workflow's schedule?
+     *
+     * @param FMW_Workflow $workflow Enabled, schedule-triggered workflow.
+     * @param object       $action   Action Scheduler action.
+     * @return bool
+     */
+    private function tick_matches( FMW_Workflow $workflow, $action ) {
+        if ( ! is_object( $action ) || ! method_exists( $action, 'get_schedule' ) ) {
+            return false;
+        }
+        $schedule = $action->get_schedule();
+        if ( ! is_object( $schedule ) || ! method_exists( $schedule, 'is_recurring' ) || ! method_exists( $schedule, 'get_recurrence' ) || ! $schedule->is_recurring() ) {
+            return false;
+        }
+        if ( (int) $schedule->get_recurrence() !== $this->compute_interval_seconds( $workflow ) ) {
+            return false;
+        }
+        $date = $schedule->get_date();
+        if ( ! $date instanceof DateTimeInterface ) {
+            return false;
+        }
+
+        $interval = $workflow->schedule_interval();
+        if ( 'daily' !== $interval && 'weekly' !== $interval ) {
+            return true; // Hourly and twice-daily run from whenever they started.
+        }
+
+        $local = ( new DateTime( '@' . $date->getTimestamp() ) )->setTimezone( wp_timezone() );
+        if ( $local->format( 'H:i' ) !== sprintf( '%02d:%02d', $workflow->schedule_hour(), $workflow->schedule_minute() ) ) {
+            return false;
+        }
+
+        return 'weekly' !== $interval || (int) $local->format( 'N' ) === $workflow->schedule_day_of_week();
+    }
+
+    /**
+     * Give every enabled scheduled workflow that has no tick one, and touch
+     * nothing else.
+     *
+     * Runs through RECONCILE_NOW_HOOK. An existing tick keeps its ID and its
+     * next run: replacing it would push an hourly workflow due in ten
+     * minutes an hour out, and a twice-daily one twelve hours, on every
+     * update. Correcting ticks that no longer match is the daily
+     * reconcile's job.
+     *
+     * @since 0.12.3
+     */
+    public function add_missing_ticks() {
+        if ( ! function_exists( 'as_schedule_recurring_action' ) ) {
+            return;
+        }
+
+        $added = 0;
+        foreach ( FMW_Workflow_Repository::get_all_by_trigger_type( 'schedule' ) as $row ) {
+            $workflow = new FMW_Workflow( $row );
+            if ( ! $workflow->is_enabled() ) {
+                continue;
+            }
+            // schedule_for_workflow() returns early when a pending or
+            // running tick exists.
+            if ( as_has_scheduled_action( self::TICK_HOOK, [ $workflow->id() ], self::ACTION_GROUP ) ) {
+                continue;
+            }
+            $this->schedule_for_workflow( $workflow );
+            $added++;
+        }
+
+        FMW_Logger::info( 'Added missing scheduled workflow ticks', [ 'ticks_added' => $added ] );
     }
 
     // -----------------------------------------------------------------

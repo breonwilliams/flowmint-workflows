@@ -5,9 +5,9 @@
  * A PHP time limit, a fatal error or a memory limit ends the request before
  * FMW_Workflow_Job::handle() reaches its catch blocks. Until 0.11.0 such a
  * run stayed "running" forever: no retry, no failure alert, and none of the
- * later steps. Reproduced on a mirror of 725 Print Lab's quote workflow: a
+ * later steps. Reproduced on a local mirror of a production quote workflow: a
  * 21 MB artwork upload cut off by a 30-second limit left the run "running"
- * and the shop's quote email unsent, with nothing to tell anyone.
+ * and the team's quote email unsent, with nothing to tell anyone.
  *
  * @package FlowMintWorkflows\Tests\Unit
  */
@@ -79,7 +79,7 @@ class InterruptedRunTest extends UnitTestCase {
 		};
 
 		$workflow = new \FMW_Workflow( [
-			'id'     => '725-small-order-request',
+			'id'     => 'quote-request',
 			'title'  => 'Quote',
 			'config' => json_encode( [
 				'settings' => [ 'max_retries' => 3 ],
@@ -108,7 +108,7 @@ class InterruptedRunTest extends UnitTestCase {
 	private function run_row( array $overrides = [] ) {
 		$GLOBALS['wpdb']->row = array_merge( [
 			'id'                => 42,
-			'workflow_id'       => '725-small-order-request',
+			'workflow_id'       => 'quote-request',
 			'entry_id'          => 7,
 			'status'            => 'running',
 			'retry_count'       => 0,
