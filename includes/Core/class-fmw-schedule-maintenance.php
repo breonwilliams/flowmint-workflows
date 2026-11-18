@@ -133,13 +133,22 @@ class FMW_Schedule_Maintenance {
         }
 
         if ( FMW_VERSION !== get_option( self::CHECKED_VERSION_OPTION ) ) {
-            // Once per version, rebuild workflow ticks whatever the check
-            // found. Versions before 0.12.3 lost every tick on a
+            // Once per version, add any missing workflow ticks whatever the
+            // check found. Versions before 0.12.3 lost every tick on a
             // reactivation and waited for the daily reconcile, so a site can
             // arrive here with its reconcile in place and its ticks gone.
-            // Idempotent, and unique in Action Scheduler.
-            as_enqueue_async_action( FMW_Schedule_Listener::RECONCILE_NOW_HOOK, [], self::GROUP, true );
-            update_option( self::CHECKED_VERSION_OPTION, FMW_VERSION, true );
+            // Only adds; unique in Action Scheduler.
+            //
+            // This runs during a page load: an error here is logged and the
+            // stamp left unwritten, so the next request tries again.
+            try {
+                as_enqueue_async_action( FMW_Schedule_Listener::RECONCILE_NOW_HOOK, [], self::GROUP, true );
+                update_option( self::CHECKED_VERSION_OPTION, FMW_VERSION, true );
+            } catch ( Throwable $e ) {
+                FMW_Logger::warning( 'Could not queue the after-update tick check; will retry', [
+                    'error' => $e->getMessage(),
+                ] );
+            }
         }
     }
 
