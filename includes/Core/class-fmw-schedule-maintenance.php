@@ -398,6 +398,20 @@ class FMW_Schedule_Maintenance {
     /**
      * Take the lock without waiting.
      *
+     * Limits, all of which fall back to Action Scheduler's `unique` insert
+     * plus the collapse at the next check (a brief duplicate at worst, never
+     * a missing action):
+     *
+     *   - MySQL before 5.7.5 holds one named lock per connection; taking
+     *     another releases this one. Nothing else FlowMint does takes one,
+     *     but another plugin's GET_LOCK on the same connection would.
+     *   - The lock lives on one database server. A setup that sends some
+     *     queries to read replicas (HyperDB, LudicrousDB), or a multi-primary
+     *     cluster (Galera), can take it on a different server from another
+     *     process, so the two do not exclude each other.
+     *   - A server that cannot take the lock returns NULL; the check then
+     *     runs unlocked.
+     *
      * @return bool False only when another connection holds it.
      */
     private static function acquire_lock() {
