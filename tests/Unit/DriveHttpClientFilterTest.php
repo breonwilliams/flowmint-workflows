@@ -3,9 +3,10 @@
  * The fmw_drive_http_client filter routes the Drive client through a
  * supplied HTTP client — the service-account token request included.
  *
- * This is what lets a workflow be tested end to end without Google: 725
- * Print Lab's two quote workflows were run on a local site against a
- * stand-in for the Drive API through this filter.
+ * This is what lets a workflow be tested end to end without Google: a
+ * production install's two quote workflows (form upload to a Drive folder,
+ * then the team email) were run on a local site against a stand-in for the
+ * Drive API through this filter.
  *
  * @package FlowMintWorkflows\Tests\Unit
  */

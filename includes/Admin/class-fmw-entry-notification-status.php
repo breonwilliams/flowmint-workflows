@@ -22,8 +22,9 @@
  * and we stay quiet. 0.12.0 claimed the column whenever a run had emailed
  * anyone, which on a form whose own notification is ON replaced a true "Forms
  * emailed your team" tick with a link to a run whose only email was the
- * customer's auto-reply. Seen live on 725 Print Lab's contact form the day
- * 0.12.0 shipped.
+ * customer's auto-reply. Seen on a production install's contact form (Forms
+ * notification on, a workflow sending only the customer acknowledgement) the
+ * day 0.12.0 shipped.
  *
  * @package FlowMintWorkflows\Admin
  */
