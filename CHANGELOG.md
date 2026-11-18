@@ -38,6 +38,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   their ticks under an earlier version. It only adds: a tick that exists
   keeps its ID and its next run, so an update never delays a scheduled
   workflow.
+- **Hourly and twice-daily workflows no longer lose a run every day.** The
+  daily reconcile cancelled every tick and scheduled a new one from "now",
+  and hourly ticks start an hour from now, twice-daily ones twelve hours
+  from now. So once a day, on every install, an hourly workflow due in ten
+  minutes waited an hour, and a twice-daily one could miss a run. The
+  reconcile now keeps a tick that matches the workflow's schedule (same
+  interval and, for daily and weekly workflows, the configured time and
+  day in the site's timezone) and replaces only a tick that is missing or
+  no longer matches, which also corrects ticks that drifted with a
+  daylight-saving change.
 - **The check can never stop a queue run.** It runs as each Action
   Scheduler queue run starts, so an error from the data store would have
   stopped that run for every plugin, and the next. A missing `fmw` group

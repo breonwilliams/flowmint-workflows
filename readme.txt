@@ -61,6 +61,7 @@ Sensitive credentials (Drive service account JSON, Printavo API token) are encry
 * Fixed: page views no longer query Action Scheduler. FlowMint checks its two maintenance actions when the queue runs, on its own admin screens and once after an update, instead of on every request.
 * Fixed: those actions could be scheduled several times over, and the copies never went away. FlowMint now keeps exactly one of each and removes extras on the first request after updating.
 * Fixed: after a reactivation, a scheduler reset or a restore, scheduled workflows are rescheduled straight away instead of up to a day later. Workflows that are still scheduled keep their next run time.
+* Fixed: hourly and twice-daily workflows lost a run once a day, because the daily check rescheduled them from scratch. It now leaves a schedule that is right alone.
 * Fixed: the release ZIP's class map listed 37,000 deleted files and was loaded on every request; a page view now fits in a 40M memory limit.
 
 = 0.12.2 =

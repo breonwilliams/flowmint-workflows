@@ -15,7 +15,7 @@
  *     php $(which wp) --path=<site root> eval-file bin/smoke-test-schedule-maintenance.php restore=<snapshot file>
  *
  * Scenarios (default: all): page, herd, gap, collapse, fresh, reset,
- * nogroup, restore, cron, lowtraffic.
+ * ticks, nogroup, restore, cron, lowtraffic.
  *
  * object-cache installs a file-backed persistent object cache drop-in
  * (wp-content/object-cache.php) for the run and removes it afterwards. It
@@ -343,6 +343,12 @@ switch ( $o['mode'] ) {
     case 'queue':
         ActionScheduler_QueueRunner::instance()->run( 'Harness' );
         break;
+    case 'reconcile':
+        do_action( 'fmw_reconcile_scheduled_events' );
+        break;
+    case 'reconcile-now':
+        do_action( 'fmw_reconcile_scheduled_events_now' );
+        break;
     case 'hold-sweep':
         $ids = as_get_scheduled_actions( [ 'hook' => 'fmw_sweep_interrupted_runs', 'group' => 'fmw', 'status' => 'pending', 'per_page' => 1 ], 'ids' );
         if ( $ids ) {
@@ -606,7 +612,7 @@ if ( $fmwsm_opts['restore'] ) {
     return;
 }
 
-$fmwsm_all = [ 'page', 'herd', 'gap', 'collapse', 'fresh', 'reset', 'nogroup', 'restore', 'cron', 'lowtraffic' ];
+$fmwsm_all = [ 'page', 'herd', 'gap', 'collapse', 'fresh', 'reset', 'ticks', 'nogroup', 'restore', 'cron', 'lowtraffic' ];
 $fmwsm_run = $fmwsm_only ? array_values( array_intersect( $fmwsm_all, $fmwsm_only ) ) : $fmwsm_all;
 
 if ( $fmwsm_opts['object-cache'] ) {
@@ -759,6 +765,64 @@ if ( in_array( 'reset', $fmwsm_run, true ) ) {
             } );
         }
     }
+}
+
+if ( in_array( 'ticks', $fmwsm_run, true ) ) {
+    fmwsm_scenario( 'Next-run times stay put across the daily reconcile and the one-off pass', function () {
+        global $wpdb;
+        fmwsm_set_workflows( 0 );
+        $schedules = [
+            'harness-hourly'     => [ 'interval' => 'hourly' ],
+            'harness-twicedaily' => [ 'interval' => 'twicedaily' ],
+            'harness-daily'      => [ 'interval' => 'daily', 'hour' => 3, 'minute' => 15 ],
+            'harness-weekly'     => [ 'interval' => 'weekly', 'day_of_week' => 3, 'hour' => 4, 'minute' => 30 ],
+        ];
+        foreach ( $schedules as $id => $trigger ) {
+            FMW_Workflow_Repository::create( [
+                'id'      => $id,
+                'title'   => $id,
+                'enabled' => true,
+                'config'  => [
+                    'trigger' => array_merge( [ 'type' => 'schedule' ], $trigger ),
+                    'steps'   => [ [ 'name' => 'note', 'type' => 'log_info', 'config' => [ 'message' => 'harness' ] ] ],
+                ],
+            ] );
+        }
+        fmwsm_flush_caches();
+        $ticks = function () use ( $schedules ) {
+            $out = [];
+            foreach ( array_keys( $schedules ) as $id ) {
+                foreach ( as_get_scheduled_actions( [ 'hook' => FMWSM_TICK, 'args' => [ $id ], 'group' => 'fmw', 'status' => 'pending', 'per_page' => 10 ] ) as $action_id => $action ) {
+                    $out[ $id ][] = [ (int) $action_id, $action->get_schedule()->get_date()->getTimestamp(), (int) $action->get_schedule()->get_recurrence() ];
+                }
+            }
+            return $out;
+        };
+        $before = $ticks();
+        fmwsm_assert( 'four workflows, one tick each', 4 === count( $before ) && 4 === count( array_filter( $before, function ( $t ) { return 1 === count( $t ); } ) ), wp_json_encode( $before ) );
+        foreach ( [ 'reconcile' => 'the daily reconcile', 'reconcile-now' => 'the one-off pass' ] as $mode => $label ) {
+            fmwsm_child( [ 'mode' => $mode ] );
+            fmwsm_flush_caches();
+            $after = $ticks();
+            fmwsm_assert( "after $label: every tick keeps its ID and next run", $after === $before, wp_json_encode( [ 'before' => $before, 'after' => $after ] ) );
+        }
+        // A schedule changed behind the save hooks: the daily reconcile
+        // replaces that tick, and only that one.
+        $row    = FMW_Workflow_Repository::get( 'harness-hourly' );
+        $config = json_decode( $row['config'], true );
+        $config['trigger']['interval'] = 'daily';
+        $config['trigger']['hour']     = 5;
+        $config['trigger']['minute']   = 0;
+        $wpdb->update( FMW_Workflow_Repository::table(), [ 'config' => wp_json_encode( $config ) ], [ 'id' => 'harness-hourly' ] );
+        fmwsm_flush_caches();
+        fmwsm_child( [ 'mode' => 'reconcile' ] );
+        fmwsm_flush_caches();
+        $after   = $ticks();
+        $changed = $after['harness-hourly'] ?? [];
+        fmwsm_assert( 'a tick that no longer matches is replaced, at the new interval', 1 === count( $changed ) && $changed[0][0] !== $before['harness-hourly'][0][0] && DAY_IN_SECONDS === $changed[0][2], wp_json_encode( $changed ) );
+        unset( $before['harness-hourly'], $after['harness-hourly'] );
+        fmwsm_assert( 'the other ticks are untouched', $after === $before, wp_json_encode( [ 'before' => $before, 'after' => $after ] ) );
+    } );
 }
 
 if ( in_array( 'nogroup', $fmwsm_run, true ) ) {

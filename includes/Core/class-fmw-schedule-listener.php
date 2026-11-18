@@ -127,18 +127,27 @@ class FMW_Schedule_Listener {
     /**
      * Reconcile AS recurring events with the DB.
      *
-     * Iterates every workflow with trigger_type='schedule', unschedules
-     * any existing recurring event for it, then re-schedules if the
-     * workflow is enabled. This guarantees that:
+     * For every workflow with trigger_type='schedule':
      *
-     *   - Enabled scheduled workflows have exactly one recurring event.
-     *   - Disabled scheduled workflows have none.
-     *   - Workflows whose interval changed get the new interval applied.
+     *   - disabled: its ticks are unscheduled;
+     *   - enabled, with a pending tick that matches its schedule: that tick
+     *     stays, keeping its ID and its next run. Any other pending copies
+     *     are cancelled, keeping the matching one due soonest;
+     *   - enabled, with no tick or none that matches: its ticks are
+     *     replaced by one scheduled from the workflow's settings.
      *
-     * Called daily via the RECONCILE_HOOK Action Scheduler action, and
-     * once via RECONCILE_NOW_HOOK whenever FMW_Schedule_Maintenance had to
-     * schedule the daily action again (a fresh install included), so ticks
-     * come back without waiting a day.
+     * "Matches" means a recurring tick whose interval is the workflow's,
+     * and, for daily and weekly workflows, whose next run falls at the
+     * configured time (and day) in the site's timezone. A tick that drifted
+     * (a daylight-saving change, an edit made outside the save hooks) is
+     * therefore corrected; one that is right is left alone.
+     *
+     * Until 0.12.3 every tick was cancelled and rescheduled from "now" each
+     * day. Hourly ticks restart at now + 1 hour and twice-daily ones at now
+     * + 12 hours, so hourly workflows lost up to an hour and twice-daily ones
+     * could miss a run, once a day on every install.
+     *
+     * Called daily via the RECONCILE_HOOK Action Scheduler action.
      */
     public function ensure_recurring_events_registered() {
         if ( ! function_exists( 'as_schedule_recurring_action' ) ) {
@@ -148,28 +157,102 @@ class FMW_Schedule_Listener {
 
         $rows = FMW_Workflow_Repository::get_all_by_trigger_type( 'schedule' );
 
-        $reviewed     = 0;
-        $unscheduled  = 0;
-        $rescheduled  = 0;
+        $reviewed    = 0;
+        $unscheduled = 0;
+        $kept        = 0;
+        $replaced    = 0;
 
         foreach ( $rows as $row ) {
             $workflow = new FMW_Workflow( $row );
+            $reviewed++;
 
-            $unscheduled += $this->unschedule_for_workflow( $workflow->id() );
-
-            if ( $workflow->is_enabled() ) {
-                $this->schedule_for_workflow( $workflow );
-                $rescheduled++;
+            if ( ! $workflow->is_enabled() ) {
+                $unscheduled += $this->unschedule_for_workflow( $workflow->id() );
+                continue;
             }
 
-            $reviewed++;
+            $ticks = function_exists( 'as_get_scheduled_actions' ) ? as_get_scheduled_actions( [
+                'hook'     => self::TICK_HOOK,
+                'args'     => [ $workflow->id() ],
+                'group'    => self::ACTION_GROUP,
+                'status'   => 'pending',
+                'per_page' => 50,
+                'orderby'  => 'date',
+                'order'    => 'ASC',
+            ] ) : [];
+            $ticks = is_array( $ticks ) ? $ticks : [];
+
+            $keep = null;
+            foreach ( $ticks as $action_id => $action ) {
+                if ( $this->tick_matches( $workflow, $action ) ) {
+                    $keep = (int) $action_id;
+                    break;
+                }
+            }
+
+            if ( null === $keep ) {
+                $unscheduled += $this->unschedule_for_workflow( $workflow->id() );
+                $this->schedule_for_workflow( $workflow );
+                $replaced++;
+                continue;
+            }
+
+            foreach ( array_keys( $ticks ) as $action_id ) {
+                if ( (int) $action_id === $keep ) {
+                    continue;
+                }
+                try {
+                    ActionScheduler::store()->cancel_action( (int) $action_id );
+                    $unscheduled++;
+                } catch ( Throwable $e ) {
+                    // Already gone or claimed: nothing to cancel.
+                }
+            }
+            $kept++;
         }
 
         FMW_Logger::info( 'Reconciled scheduled workflow events', [
-            'workflows_reviewed'      => $reviewed,
+            'workflows_reviewed'       => $reviewed,
+            'ticks_kept'               => $kept,
+            'ticks_replaced'           => $replaced,
             'recurring_events_dropped' => $unscheduled,
-            'recurring_events_added'   => $rescheduled,
         ] );
+    }
+
+    /**
+     * Does a pending tick still match the workflow's schedule?
+     *
+     * @param FMW_Workflow $workflow Enabled, schedule-triggered workflow.
+     * @param object       $action   Action Scheduler action.
+     * @return bool
+     */
+    private function tick_matches( FMW_Workflow $workflow, $action ) {
+        if ( ! is_object( $action ) || ! method_exists( $action, 'get_schedule' ) ) {
+            return false;
+        }
+        $schedule = $action->get_schedule();
+        if ( ! is_object( $schedule ) || ! method_exists( $schedule, 'is_recurring' ) || ! method_exists( $schedule, 'get_recurrence' ) || ! $schedule->is_recurring() ) {
+            return false;
+        }
+        if ( (int) $schedule->get_recurrence() !== $this->compute_interval_seconds( $workflow ) ) {
+            return false;
+        }
+        $date = $schedule->get_date();
+        if ( ! $date instanceof DateTimeInterface ) {
+            return false;
+        }
+
+        $interval = $workflow->schedule_interval();
+        if ( 'daily' !== $interval && 'weekly' !== $interval ) {
+            return true; // Hourly and twice-daily run from whenever they started.
+        }
+
+        $local = ( new DateTime( '@' . $date->getTimestamp() ) )->setTimezone( wp_timezone() );
+        if ( $local->format( 'H:i' ) !== sprintf( '%02d:%02d', $workflow->schedule_hour(), $workflow->schedule_minute() ) ) {
+            return false;
+        }
+
+        return 'weekly' !== $interval || (int) $local->format( 'N' ) === $workflow->schedule_day_of_week();
     }
 
     /**
