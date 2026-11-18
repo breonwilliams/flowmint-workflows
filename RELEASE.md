@@ -12,9 +12,25 @@ If you add an auto-updater in a future release, copy FRE's `FRE_GitHub_Updater` 
 
 ---
 
-## Hard dependency on Form Runtime Engine
+## Hard dependency on Promptless Forms
 
-FlowMint Workflows requires **Form Runtime Engine 1.6.0+** to be active. The plugin listens to `fre_submission_complete` (FRE's post-submission action) and refuses to initialize if FRE is missing or out-of-date. Bumping `FMW_REQUIRED_FRE_VERSION` in `flowmint-workflows.php` is a breaking change — coordinate with FRE's release cadence.
+FlowMint Workflows requires **Promptless Forms 1.8.0+** (formerly Form Runtime Engine; `FMW_REQUIRED_FRE_VERSION` in `flowmint-workflows.php`) to be active. Forms counts as present when the `PForms_VERSION` constant is defined or the `Promptless_Forms` class exists; with neither, or with a version below the minimum, FlowMint shows an admin notice and starts none of its components. Bumping `FMW_REQUIRED_FRE_VERSION` is a breaking change — coordinate with Forms' release cadence.
+
+What FlowMint uses from Forms, each behind the check shown. The full contract is `docs/INTEGRATION_FRE.md`; anything not listed there must not be called.
+
+| Forms surface | Used for | Checked with |
+|---|---|---|
+| `PForms_VERSION` constant | Presence and minimum version; connector preflight | `defined()` |
+| `Promptless_Forms` class | Presence when the constant is missing | `class_exists()` |
+| `pforms_submission_complete` action | Starting form-triggered runs | None needed: a hook Forms never fires does nothing |
+| `pforms_entry_notification_status` filter (Forms 1.12.0+) | The Entries screen's Email column (admin only) | None needed: an older Forms never applies it |
+| `PForms_Entry::get()` | Entry data and files for a run; `fre_get_entry`, `fre_delete_entry`, `fre_delete_entries`, `fre_update_entry_status` | `class_exists( 'PForms_Entry' )` |
+| `PForms_Entry::delete()` | `fre_delete_entry`, `fre_delete_entries` | `class_exists`, plus `method_exists` in `fre_delete_entry` |
+| `PForms_Entry::update_status()` | `fre_update_entry_status` | `class_exists` and `method_exists`; without the method the step writes `{prefix}fre_entries.status` directly |
+| `PForms_Entry_Query` | `fre_list_entries` | `class_exists( 'PForms_Entry_Query' )` |
+| `PForms_Forms_Repository::get()`, `PForms_Field_Type_Abstract::resolve_display_value()` | Display labels for a run's form data | `class_exists()` on both |
+| `pforms()->registry->get()` / `->exists()` | The form title in a run's context; checking a workflow's `form_id` | `function_exists( 'pforms' )` and a non-empty registry |
+| `pforms_get_db_form()` | Checking a `form_id` stored in the database rather than registered | `function_exists()` |
 
 ---
 
@@ -124,8 +140,8 @@ gh release create v0.6.0 build/flowmint-workflows.zip \
 ## Post-release verification
 
 1. Open the GitHub release page. Confirm the ZIP asset is attached.
-2. On a test WordPress site **that already has Form Runtime Engine ≥ 1.6.0 active**, install the new FlowMint ZIP via **Plugins → Add New → Upload Plugin → Replace current with uploaded**.
-3. Activate without errors. Confirm there's no "FlowMint Workflows requires Form Runtime Engine" admin notice.
+2. On a test WordPress site **that already has Promptless Forms ≥ 1.8.0 active**, install the new FlowMint ZIP via **Plugins → Add New → Upload Plugin → Replace current with uploaded**.
+3. Activate without errors. Confirm there's no "FlowMint Workflows requires Promptless Forms" admin notice.
 4. Visit **FlowMint Workflows → Run History** — page should load (empty list is fine).
 5. Visit **FlowMint Workflows → Claude Connection** — page should load with the kill-switch toggle and Generate Connection button.
 6. If credentials are configured: test one credential via the connector REST API to confirm the upgrade didn't break the encryption boundary.

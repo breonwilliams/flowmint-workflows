@@ -612,11 +612,13 @@ Admin UI shows:
 
 ### Activation
 
-`register_activation_hook()` runs:
-- Verifies FormEngine is active and version >= 1.6.0 (deactivate self with admin notice if not)
-- Creates DB tables (`wp_fmw_workflows`, `wp_fmw_workflow_runs`, `wp_fmw_workflow_run_steps`)
-- Schedules a daily housekeeping Action Scheduler job (cleanup old run records per retention policy)
-- Sets default options
+`register_activation_hook()` runs `FlowMint_Workflows::activate()`:
+- Creates DB tables (`wp_fmw_workflows`, `wp_fmw_workflow_runs`, `wp_fmw_workflow_run_steps`) and records `fmw_db_version`
+- Grants the `flowmint_manage_workflows` capability to the default roles
+- Stamps `fmw_activated_at`
+- Deletes `fmw_maintenance_checked_version` (0.12.3), so the next request schedules the maintenance actions again and adds any missing workflow ticks
+
+It does not check FormEngine and does not fail without it: the FormEngine check (`PForms_VERSION` 1.8.0+ or the `Promptless_Forms` class) runs on every load, and without FormEngine FMW shows an admin notice and starts none of its components. See `INTEGRATION_FRE.md`, "Version compatibility".
 
 ### Deactivation
 

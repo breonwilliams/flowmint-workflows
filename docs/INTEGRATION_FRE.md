@@ -39,14 +39,20 @@ This ordering means workflows have access to fully-attached file data via PForms
 
 ### Classes (FormEngine exposes, FlowMint Workflows calls)
 
-| Class / function | Used for |
-|---|---|
-| `PForms_Entry` | Loading entry data and file attachments by entry ID; `update_status()` and `delete()` for the entry steps |
-| `PForms_Entry_Query` | Listing entries for `fre_list_entries` |
-| `pforms()->registry->get($form_id)` | Verifying a form_id exists when a workflow is created/updated |
-| `pforms()->registry->exists($form_id)` | Quick existence check |
+| Class / function / constant | Used for | Checked with before use |
+|---|---|---|
+| `PForms_VERSION` | Presence and the minimum version (`FMW_REQUIRED_FRE_VERSION`, 1.8.0); connector preflight | `defined()` |
+| `Promptless_Forms` | Presence when the constant is missing | `class_exists()` |
+| `PForms_Entry::get()` | Entry data and file attachments for a run; the `fre_get_entry`, `fre_delete_entry`, `fre_delete_entries` and `fre_update_entry_status` steps | `class_exists( 'PForms_Entry' )` |
+| `PForms_Entry::delete()` | `fre_delete_entry`, `fre_delete_entries` | `class_exists`, plus `method_exists` in `fre_delete_entry`; `fre_delete_entries` catches a failure per entry |
+| `PForms_Entry::update_status()` | `fre_update_entry_status` | `class_exists` and `method_exists`. Without the method the step writes `{prefix}fre_entries.status` directly, the one place FlowMint relies on FormEngine's table rather than its API |
+| `PForms_Entry_Query` | Listing entries for `fre_list_entries` | `class_exists( 'PForms_Entry_Query' )` |
+| `PForms_Forms_Repository::get()` and `PForms_Field_Type_Abstract::resolve_display_value()` | Display labels (`labels.*`) for a run's form data | `class_exists()` on both |
+| `pforms()->registry->get($form_id)` | The form's title in a run's context; verifying a form_id when a workflow is created/updated | `function_exists( 'pforms' )` and a non-empty `pforms()->registry` |
+| `pforms()->registry->exists($form_id)` | Quick existence check in the validator | The same |
+| `pforms_get_db_form($form_id)` | Verifying a form stored in the database rather than registered | `function_exists()` |
 
-These are the ONLY FormEngine APIs FlowMint Workflows is allowed to call directly. Anything else is implementation detail that may change without notice in FormEngine releases.
+These are the ONLY FormEngine APIs FlowMint Workflows is allowed to call directly. Anything else is implementation detail that may change without notice in FormEngine releases. Each is checked before use, so a missing one makes that feature report an error or do nothing; it never fatals the site.
 
 ### REST endpoints (FormEngine exposes, FlowMint Workflows does NOT call)
 
@@ -129,13 +135,14 @@ Use cases:
 
 ## Version compatibility
 
-FlowMint Workflows declares `Requires FormEngine >= 1.6.0` in its plugin header.
+FlowMint Workflows requires FormEngine (Promptless Forms) 1.8.0 or newer: `FMW_REQUIRED_FRE_VERSION` in `flowmint-workflows.php`. 1.8.0 is the release that renamed FormEngine's PHP surface to `pforms_*` / `PForms_*`.
 
-If FormEngine is below the minimum version:
-- FMW shows an admin notice on every page load with the version mismatch
-- The submission listener is not registered (no workflows fire)
-- The admin UI shows a banner explaining the issue
-- The plugin doesn't activate beyond the bare minimum (no DB tables created)
+FormEngine counts as present when `PForms_VERSION` is defined or the `Promptless_Forms` class exists. If it is missing, or `PForms_VERSION` is below the minimum:
+- FMW shows an admin notice naming the problem
+- None of FMW's components start: no submission listener (no workflows fire), no schedule listener, no REST routes, no admin screens
+- Activation still creates FMW's own tables, so nothing is lost and FMW starts once FormEngine is fixed
+
+When only the class is detectable (the constant missing), FMW treats FormEngine as present and cannot enforce the minimum version.
 
 When FormEngine releases a new version, FlowMint Workflows is tested against it and the minimum version may be bumped. Bumping the minimum required FRE version is a MINOR version change for FMW (not major), since the contract direction is one-way.
 
