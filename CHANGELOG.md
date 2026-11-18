@@ -36,6 +36,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Scheduler in the same queue run. The first check after updating to this
   version queues one as well, for sites that lost their ticks under an
   earlier version.
+- **The check can never stop a queue run.** It runs as each Action
+  Scheduler queue run starts, so an error from the data store would have
+  stopped that run for every plugin, and the next. A missing `fmw` group
+  (after a reset, a restore or a fresh install) is treated as "nothing
+  scheduled yet"; any other error is logged and the check tried again at the
+  next run.
 - **The release ZIP's class map lists only files it contains, and a page
   view fits in a 40M memory limit again.** Composer writes the optimized
   class map before the Google client's cleanup script removes every API

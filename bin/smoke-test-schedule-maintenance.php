@@ -15,7 +15,7 @@
  *     php $(which wp) --path=<site root> eval-file bin/smoke-test-schedule-maintenance.php restore=<snapshot file>
  *
  * Scenarios (default: all): page, herd, gap, collapse, fresh, reset,
- * restore, cron, lowtraffic.
+ * nogroup, restore, cron, lowtraffic.
  *
  * object-cache installs a file-backed persistent object cache drop-in
  * (wp-content/object-cache.php) for the run and removes it afterwards. It
@@ -606,7 +606,7 @@ if ( $fmwsm_opts['restore'] ) {
     return;
 }
 
-$fmwsm_all = [ 'page', 'herd', 'gap', 'collapse', 'fresh', 'reset', 'restore', 'cron', 'lowtraffic' ];
+$fmwsm_all = [ 'page', 'herd', 'gap', 'collapse', 'fresh', 'reset', 'nogroup', 'restore', 'cron', 'lowtraffic' ];
 $fmwsm_run = $fmwsm_only ? array_values( array_intersect( $fmwsm_all, $fmwsm_only ) ) : $fmwsm_all;
 
 if ( $fmwsm_opts['object-cache'] ) {
@@ -756,6 +756,36 @@ if ( in_array( 'reset', $fmwsm_run, true ) ) {
                 fmwsm_truncate_action_scheduler();
                 fmwsm_child( [ 'woo' => $woo, 'mode' => 'queue' ] );
                 fmwsm_assert_state( 'after one queue run', $k );
+            } );
+        }
+    }
+}
+
+if ( in_array( 'nogroup', $fmwsm_run, true ) ) {
+    foreach ( fmwsm_woo_variants() as $woo ) {
+        foreach ( [ 'queue run', 'wp action-scheduler run --group=fmw' ] as $runner ) {
+            fmwsm_scenario( 'No "fmw" group yet, healed by a ' . $runner . ' (' . fmwsm_label( $woo ) . ')', function () use ( $woo, $runner ) {
+                global $wpdb;
+                $k   = fmwsm_enabled_scheduled();
+                $gid = fmwsm_group_id();
+                // The state after a reset, a restore or a fresh install
+                // until FlowMint schedules something: no group, no actions.
+                $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->prefix}actionscheduler_actions WHERE group_id = %d", $gid ) );
+                $wpdb->query( "DELETE FROM {$wpdb->prefix}actionscheduler_groups WHERE slug = 'fmw'" );
+                fmwsm_flush_caches();
+                fmwsm_assert( 'precondition: the group is gone', 0 === fmwsm_group_id() );
+                if ( 'queue run' === $runner ) {
+                    $r = fmwsm_child( [ 'woo' => $woo, 'mode' => 'queue' ] );
+                    fmwsm_assert( 'the queue run completed', empty( $r['fatal'] ), (string) ( $r['fatal'] ?? '' ) );
+                } else {
+                    list( $code, $out ) = fmwsm_wp_cli( array_merge( [ 'action-scheduler', 'run', '--group=fmw' ], $woo ? [] : [ '--skip-plugins=woocommerce' ] ) );
+                    fmwsm_assert( 'the command succeeded', 0 === $code && false === stripos( $out, 'does not exist' ), substr( trim( $out ), -300 ) );
+                    // The load-time check queued the reconcile; this run picks it up.
+                    fmwsm_wp_cli( array_merge( [ 'action-scheduler', 'run', '--group=fmw' ], $woo ? [] : [ '--skip-plugins=woocommerce' ] ) );
+                }
+                fmwsm_flush_caches();
+                fmwsm_assert( 'the group exists again', fmwsm_group_id() > 0 );
+                fmwsm_assert_state( 'after the ' . $runner, $k );
             } );
         }
     }

@@ -186,8 +186,17 @@ class FMW_Schedule_Maintenance {
             return false;
         }
 
+        // This runs inside action_scheduler_before_process_queue: an
+        // exception escaping here would abort the queue run for every plugin
+        // on the site, and again on the next run. A store error is logged
+        // and the check retried at the next run instead.
         try {
             self::ensure_all();
+        } catch ( Throwable $e ) {
+            FMW_Logger::warning( 'Maintenance-action check skipped: Action Scheduler raised an error', [
+                'error' => $e->getMessage(),
+            ] );
+            return false;
         } finally {
             self::release_lock();
         }
@@ -344,12 +353,24 @@ class FMW_Schedule_Maintenance {
      * @return int[] Action IDs.
      */
     private static function find( $hook, array $query ) {
-        $ids = as_get_scheduled_actions( array_merge( [
-            'hook'    => $hook,
-            'args'    => [],
-            'group'   => self::GROUP,
-            'orderby' => 'none',
-        ], $query ), 'ids' );
+        // Until FlowMint schedules its first action there is no "fmw" group
+        // (fresh install, table reset, restore). Action Scheduler 3.9.3 and
+        // 4.1 answer a query for it with nothing; claiming by a missing
+        // group throws, and a store could throw here too. Either way it
+        // means no copies exist yet.
+        try {
+            $ids = as_get_scheduled_actions( array_merge( [
+                'hook'    => $hook,
+                'args'    => [],
+                'group'   => self::GROUP,
+                'orderby' => 'none',
+            ], $query ), 'ids' );
+        } catch ( InvalidArgumentException $e ) {
+            if ( false === stripos( $e->getMessage(), 'does not exist' ) ) {
+                throw $e;
+            }
+            return [];
+        }
 
         return is_array( $ids ) ? array_values( $ids ) : [];
     }
