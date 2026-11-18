@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Page views no longer query Action Scheduler.** Every request, front end
+  included, asked whether the daily reconcile and the hourly sweep were
+  scheduled: two queries per page view, with or without a persistent object
+  cache (Action Scheduler queries its tables directly). The check now runs at
+  the start of each Action Scheduler queue run (WP-Cron, a system cron,
+  WP-CLI, the async runner), when a FlowMint admin screen loads, and once
+  after an install, update or reactivation (`FMW_Schedule_Maintenance`).
+  Measured on a local site with Action Scheduler 3.9.3 and 4.1.0: 2 queries
+  per page view before, 0 after.
+- **Duplicate maintenance actions are no longer created, and existing ones
+  are removed.** The per-request check could schedule the reconcile or the
+  sweep a second time, and the copies never went away. Two causes,
+  both reproduced: several requests arriving together after the actions
+  vanished (a reactivation, a table reset, a restore), and a request landing
+  in the moment between Action Scheduler completing a recurring action and
+  scheduling its next instance. Every check now keeps only the copy due
+  soonest; per-workflow ticks are never touched. On a site with duplicates,
+  the first request after updating cuts them back to one each.
+- **Workflow ticks come back straight away after a reactivation, a table
+  reset or a restore.** Deactivating FlowMint unschedules every FlowMint
+  action, and until now ticks were rebuilt only by the daily reconcile, up to
+  a day later. When the daily reconcile has to be scheduled again, a one-off
+  reconcile (`fmw_reconcile_scheduled_events_now`) now runs through Action
+  Scheduler in the same queue run.
+
 ### Changed
 
 - **Releases ship the library versions that were tested.** `composer.lock` is

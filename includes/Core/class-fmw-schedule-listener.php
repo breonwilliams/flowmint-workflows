@@ -45,6 +45,18 @@ class FMW_Schedule_Listener {
     const RECONCILE_HOOK = 'fmw_reconcile_scheduled_events';
 
     /**
+     * One-off async action that runs the reconciliation now. Queued by
+     * FMW_Schedule_Maintenance when the daily action had to be scheduled
+     * again, because whatever removed it (a reactivation, an Action
+     * Scheduler table reset, a restore) usually removed the per-workflow
+     * ticks too. A separate hook so it never counts as a copy of the daily
+     * action.
+     *
+     * @since 0.12.3
+     */
+    const RECONCILE_NOW_HOOK = 'fmw_reconcile_scheduled_events_now';
+
+    /**
      * Action Scheduler group. Shared with the submission listener so
      * everything FMW-related is one bucket in the AS admin UI and the
      * housekeeping job.
@@ -64,6 +76,7 @@ class FMW_Schedule_Listener {
 
         // Daily reconciliation — drift correction.
         add_action( self::RECONCILE_HOOK, [ $this, 'ensure_recurring_events_registered' ], 10, 0 );
+        add_action( self::RECONCILE_NOW_HOOK, [ $this, 'ensure_recurring_events_registered' ], 10, 0 );
     }
 
     // -----------------------------------------------------------------
@@ -122,10 +135,10 @@ class FMW_Schedule_Listener {
      *   - Disabled scheduled workflows have none.
      *   - Workflows whose interval changed get the new interval applied.
      *
-     * Called daily via the RECONCILE_HOOK Action Scheduler action.
-     * Also called once at v0.6.0 bootstrap (see
-     * FlowMint_Workflows::maybe_schedule_reconciliation) so existing
-     * scheduled workflows pre-dating Phase 2's listener catch up.
+     * Called daily via the RECONCILE_HOOK Action Scheduler action, and
+     * once via RECONCILE_NOW_HOOK whenever FMW_Schedule_Maintenance had to
+     * schedule the daily action again (a fresh install included), so ticks
+     * come back without waiting a day.
      */
     public function ensure_recurring_events_registered() {
         if ( ! function_exists( 'as_schedule_recurring_action' ) ) {

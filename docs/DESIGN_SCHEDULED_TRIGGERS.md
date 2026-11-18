@@ -18,6 +18,8 @@ Six small refinements surfaced during Phase 1 implementation. None changed the c
 
 ## Reconciliation timing decision (originally TBD in §11)
 
+> **Superseded in 0.12.3.** The bootstrap below ran on every request (`init` priority 20), and so did the sweep check added in 0.11.0 (`action_scheduler_init`): two Action Scheduler queries per page view, not absorbed by an object cache. Its check-then-schedule also created duplicate maintenance actions that never went away. Both checks now live in `FMW_Schedule_Maintenance` and run at queue start, on FlowMint's admin screens and once per version; see `ARCHITECTURE.md`, "Maintenance actions", and the class docblock. The section is kept as the record of the original decision.
+
 The reconciliation bootstrap fires on `init` priority 20 (not `plugins_loaded` priority 20). Reason: Action Scheduler's data store initializes at `init` priority 1; calling `as_schedule_recurring_action` earlier emits a "called incorrectly" PHP notice AND silently no-ops. Phase 2's first smoke test caught this; the fix made the bootstrap self-healing (re-schedules if the option is set but the AS action is missing). Both behaviors are documented in `flowmint-workflows.php::maybe_schedule_reconciliation` docblock.
 
 ---

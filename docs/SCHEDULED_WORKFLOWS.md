@@ -103,7 +103,7 @@ When you save an enabled scheduled workflow, the schedule listener immediately r
 
 When you **disable** the workflow (`enabled: false`), the cron event is unregistered immediately. When you **delete** it, the cron event is unregistered. When you **change the interval** (e.g., from daily to hourly), the existing event is unscheduled and a new one is scheduled with the new interval — no duplicates.
 
-There's also a **daily reconciliation pass** that runs in the background and brings AS state into sync with the workflows table. This is drift insurance — even if an AS recurring event got lost somehow, the next reconciliation rebuilds it.
+There's also a **daily reconciliation pass** that runs in the background and brings AS state into sync with the workflows table. This is drift insurance — even if an AS recurring event got lost somehow, the next reconciliation rebuilds it. Since 0.12.3, if the reconciliation action itself had gone missing (after a reactivation, an Action Scheduler table reset or a restore), FlowMint notices at the next queue run, schedules it again and runs a reconciliation straight away, so ticks come back within one queue run rather than a day later.
 
 ## How a scheduled run flows
 
@@ -221,6 +221,7 @@ Run history is the primary surface for diagnosing scheduled workflow problems. I
 If the workflow simply isn't firing on schedule:
 
 - Check WP Admin → Tools → Scheduled Actions for a `fmw_scheduled_workflow_tick` action with your workflow ID. If it's missing, the daily reconciliation pass (which fires once every 24 hours) will re-register it; you can also force reconciliation immediately via `do_action('fmw_reconcile_scheduled_events')`.
+- Check that there is exactly one pending `fmw_reconcile_scheduled_events` and one pending `fmw_sweep_interrupted_runs` (group `fmw`). Versions before 0.12.3 could leave several; 0.12.3 and later cut them back to one at the next queue run, or as soon as a FlowMint admin screen is opened.
 - Confirm the workflow is `enabled` — disabled workflows have no cron event.
 - Confirm `trigger.type === 'schedule'` and `trigger.interval` is one of the supported enum values.
 - On a low-traffic site, ensure WP-Cron is firing. The `wp action-scheduler run` CLI command will manually process the queue.

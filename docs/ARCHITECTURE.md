@@ -416,6 +416,8 @@ The executor and downstream code are unchanged. The only new path is the listene
 
 **Reconciliation.** Per-workflow AS recurring events are registered when a workflow is saved (`fmw_workflow_saved` action), unregistered when it's disabled (`fmw_workflow_disabled`) or deleted (`fmw_workflow_deleted`). A daily `fmw_reconcile_scheduled_events` AS action sweeps the workflows table and brings AS state into sync with the DB — drift correction for the rare case where an event was lost or wiped.
 
+**Maintenance actions (0.12.3).** The daily reconcile and the hourly `fmw_sweep_interrupted_runs` are kept at exactly one pending copy each by `FMW_Schedule_Maintenance`, which checks at the start of every Action Scheduler queue run, on FlowMint's admin screens, and once per FlowMint version (an autoloaded stamp, deleted on activation). Page views make no Action Scheduler query. Each check also cancels all but the copy due soonest, and when the daily reconcile had to be scheduled again it queues a one-off `fmw_reconcile_scheduled_events_now` so ticks come back in the same queue run. Before 0.12.3 the check ran on every request and could create duplicates that never went away; the reasons are in the class docblock.
+
 See `DESIGN_SCHEDULED_TRIGGERS.md` for the full engineering contract, `SCHEDULED_WORKFLOWS.md` for the user-facing guide.
 
 ## Variable interpolation syntax
