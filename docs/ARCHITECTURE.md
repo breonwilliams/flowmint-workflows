@@ -187,7 +187,7 @@ The workflow definitions registry.
 
 ```sql
 CREATE TABLE wp_fmw_workflows (
-  id              VARCHAR(64)  NOT NULL,         -- e.g., "725-bulk-order-quote"
+  id              VARCHAR(64)  NOT NULL,         -- e.g., "bulk-order-quote"
   title           VARCHAR(255) NOT NULL,
   form_id         VARCHAR(64)  NOT NULL,         -- references FRE form_id
   enabled         TINYINT(1)   NOT NULL DEFAULT 1,
@@ -284,7 +284,7 @@ A workflow definition's `config` field is JSON of this shape:
 ```json
 {
   "version": "1.0",
-  "title": "725 Bulk Order → Printavo + Drive",
+  "title": "Bulk Order → Printavo + Drive",
   "description": "Internal note: optional",
   "form_id": "bulk-order-quote",
   "enabled": true,
@@ -310,7 +310,7 @@ A workflow definition's `config` field is JSON of this shape:
       "name": "month_folder",
       "type": "drive_find_or_create_folder",
       "config": {
-        "parent_id": "1aVp_Zhd0OyL5K_h9dNYQ_f6lf_VOC8K8",
+        "parent_id": "1AbCdEfGhIjKlMnOpQrStUvWxYz012345",
         "name": "{{ now('Y-m') }}"
       }
     },
@@ -336,10 +336,10 @@ A workflow definition's `config` field is JSON of this shape:
       "type": "printavo_create_quote",
       "config": {
         "customer_id": "{{ steps.customer.id }}",
-        "user_id": 60522,
-        "invoice_status_id": 416419,
+        "user_id": 123456,
+        "invoice_status_id": 654321,
         "nickname": "{{ steps.submission_folder.name }}",
-        "description": "{{ template('725-bulk-quote-description') }}"
+        "description": "{{ template('bulk-quote-description') }}"
       }
     },
     {
@@ -348,9 +348,9 @@ A workflow definition's `config` field is JSON of this shape:
       "config": {
         "to": "{{ data.email }}",
         "from_name": "Orders Team",
-        "from_email": "orders@725printlab.com",
+        "from_email": "orders@example.com",
         "subject": "Thank You for Your Quote Request!",
-        "template": "725-customer-ack"
+        "template": "customer-ack"
       }
     },
     {
@@ -583,7 +583,7 @@ Each step can override the default error handling via `on_error`:
 ```php
 FMW_Logger::info('Workflow run started', [
     'run_id' => 123,
-    'workflow_id' => '725-bulk-order-quote',
+    'workflow_id' => 'bulk-order-quote',
     'entry_id' => 5,
 ]);
 ```

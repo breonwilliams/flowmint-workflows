@@ -48,9 +48,12 @@ mkdir -p "${TEMP_DIR}"
 # Copy production files (exclude dev/test files).
 #
 # The exclude list drops VCS/IDE state, lint/test config, build & test
-# artifacts (build/, release/, *.zip, .phpunit.result.cache, *.log), the
-# build script itself (we don't ship the script that builds the ZIP),
-# source-only dirs (node_modules, tests), and OS junk. vendor/ is left out
+# artifacts (build/, release/, *.zip, .phpunit.result.cache, *.log), bin/
+# (the build script and the local test harnesses), source-only dirs
+# (node_modules, tests), the notes written for developers and AI sessions
+# (CLAUDE.md anywhere, AGENTS.md, RELEASE.md, NEXT_SESSION_*.md,
+# *_AUDIT.md at the root), and OS junk. Until 0.12.3 those notes shipped,
+# and with them the names of the installs they were written about. vendor/ is left out
 # too: the install below builds it fresh from composer.lock, so the local
 # development vendor/ (with its dev packages) never leaks into the ZIP.
 # composer.lock IS copied: the install reads it, and it ships as the record
@@ -71,10 +74,12 @@ phpunit.xml.dist
 vendor
 node_modules
 tests
-bin/install-wp-tests.sh
-bin/build-release.sh
-bin/smoke-test-*.sh
-bin/smoke-test-*.php
+/bin/
+CLAUDE.md
+AGENTS.md
+/RELEASE.md
+/NEXT_SESSION_*.md
+/*_AUDIT.md
 build
 release
 *.zip
@@ -157,6 +162,15 @@ done
 # A flattened build puts nested files at the plugin root — detect that too.
 if echo "$ZIP_MANIFEST" | grep -q " ${PLUGIN_SLUG}/class-fmw-workflow-executor.php$"; then
     echo "  FLATTENED STRUCTURE DETECTED: includes/ files found at plugin root"
+    ZIP_STRUCTURE_OK=0
+fi
+
+# Development-only files of ours must never ship (see the exclude list
+# above). vendor/ is the libraries' own business: some ship a CLAUDE.md.
+DEV_ONLY=$(echo "$ZIP_MANIFEST" | grep -v " ${PLUGIN_SLUG}/vendor/" | grep -E " ${PLUGIN_SLUG}/(bin/|(.*/)?CLAUDE\.md$|AGENTS\.md$|RELEASE\.md$|NEXT_SESSION_.*\.md$|[^/]*_AUDIT\.md$)" || true)
+if [ -n "$DEV_ONLY" ]; then
+    echo "  DEVELOPMENT-ONLY FILES IN ZIP:"
+    echo "$DEV_ONLY"
     ZIP_STRUCTURE_OK=0
 fi
 

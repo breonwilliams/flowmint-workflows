@@ -433,7 +433,7 @@ Looks up a folder by name within a parent. Returns metadata or empty if not foun
 **Config:**
 ```json
 {
-  "parent_id": "1aVp_Zhd0OyL5K_h9dNYQ_f6lf_VOC8K8",
+  "parent_id": "1AbCdEfGhIjKlMnOpQrStUvWxYz012345",
   "name": "2026-05",
   "exact_match": true
 }
@@ -462,7 +462,7 @@ Returns an existing folder if it exists, otherwise creates one.
 **Config:**
 ```json
 {
-  "parent_id": "1aVp_Zhd0OyL5K_h9dNYQ_f6lf_VOC8K8",
+  "parent_id": "1AbCdEfGhIjKlMnOpQrStUvWxYz012345",
   "name": "{{ now('Y-m') }}"
 }
 ```
@@ -612,12 +612,12 @@ Like `send_email` but loads body from a template file. Templates live in `wp-con
   "from_name": "Orders Team",
   "from_email": "orders@example.com",
   "subject": "Thank you for your quote request",
-  "template": "725-customer-ack",
+  "template": "customer-ack",
   "is_html": false
 }
 ```
 
-Template file `725-customer-ack.txt`:
+Template file `customer-ack.txt`:
 ```
 Hi {{ data.full_name }},
 
@@ -654,7 +654,7 @@ Looks up a customer by email. Returns metadata or empty.
 ```json
 {
   "found": true,
-  "id": "10706641",
+  "id": "1000001",
   "first_name": "Test",
   "last_name": "User",
   "email": "test@example.com",
@@ -719,10 +719,10 @@ Creates a Printavo Quote. The heaviest step — most config fields.
 ```json
 {
   "customer_id": "{{ steps.customer.id }}",
-  "user_id": 60522,
-  "invoice_status_id": 416419,
+  "user_id": 123456,
+  "invoice_status_id": 654321,
   "nickname": "{{ steps.submission_folder.name }}",
-  "description": "{{ template('725-bulk-quote-description') }}",
+  "description": "{{ template('bulk-quote-description') }}",
   "customer_due_date": "{{ data.target_delivery_date }}",
   "lineitems": [],
   "tags": ["website-submission"]

@@ -1,6 +1,6 @@
 # FlowMint Workflows — Scheduled Triggers Design
 
-**Status:** **Implemented in v0.6.0-rc1** (2026-05-13). All Phase 1–3 deliverables verified end-to-end on local Flywheel (99/99 smoke checks green). Phase 4 packaging + 725 production deploy in progress at time of writing.
+**Status:** **Implemented in v0.6.0-rc1** (2026-05-13). All Phase 1–3 deliverables verified end-to-end on local Flywheel (99/99 smoke checks green). Phase 4 packaging + first production deploy in progress at time of writing.
 **Author:** Architecture review session, May 13, 2026
 **Target version:** 0.6.0 (minor bump from 0.5.0)
 **Supersedes:** ROADMAP.md "Scheduled workflows (cron-style triggers)" out-of-scope item for v1.0
@@ -38,7 +38,7 @@ The design is deliberately small in surface area — one new trigger type, one n
 
 ### 2.1 Why now
 
-The 725 Print Lab production deployment is the first FMW client. End-to-end runs through the Bulk + Small workflows produce two outputs in WordPress that we want to retire over time:
+The first FMW client is a production install (a print shop running two quote-request workflows). End-to-end runs through the Bulk + Small workflows produce two outputs in WordPress that we want to retire over time:
 
 1. **FRE entries** — every form submission creates a row in the FormEngine entries table with the form data and (for forms with file fields) attached files in `wp-content/uploads/fre/...`. These accumulate forever unless explicitly deleted.
 2. **`wp_fmw_workflow_runs` records** — already addressed by the existing daily housekeeping job (`fmw_run_retention_days`, default 90 days). Not in scope here.
@@ -47,7 +47,7 @@ The clean architectural answer for FRE entries is **scheduled cleanup**: a daily
 
 ### 2.2 Why not a one-off hardcoded retention feature
 
-The simpler alternative is to extend the existing housekeeping job to also purge FRE entries. That fixes 725's immediate problem but doesn't unlock any reusable capability. The cost-of-the-right-design tax is modest (~200 LOC) and the long-term payoff is large: every future FMW client may eventually need periodic operations.
+The simpler alternative is to extend the existing housekeeping job to also purge FRE entries. That fixes the first client's immediate problem but doesn't unlock any reusable capability. The cost-of-the-right-design tax is modest (~200 LOC) and the long-term payoff is large: every future FMW client may eventually need periodic operations.
 
 ### 2.3 Why this design respects the existing architecture
 
@@ -66,7 +66,7 @@ The plugin's architecture doc (`ARCHITECTURE.md`) explicitly anticipated this wo
 1. Workflows can be triggered by a recurring schedule instead of (or in addition to) form submission.
 2. The schedule is specified in the workflow JSON config (no out-of-band scheduling state).
 3. Existing form-triggered workflows continue to work unchanged.
-4. The 725 Print Lab production install can deploy a daily "FRE entry retention" workflow that purges entries older than 30 days across all three forms.
+4. The first production install can deploy a daily "FRE entry retention" workflow that purges entries older than 30 days across all three forms.
 5. The capability is reusable: any new step type added later (Phase 2+) becomes invocable from a scheduled workflow without further plugin changes.
 
 ### 3.2 Non-goals
@@ -388,7 +388,7 @@ Two new step types in `includes/Steps/Core/`. Both follow the existing patterns 
 
 ### 5.6 Example end-to-end: FRE entry retention workflow
 
-Putting everything together — the workflow that solves 725's immediate problem:
+Putting everything together — the workflow that solves the first client's immediate problem:
 
 ```json
 {
@@ -522,7 +522,7 @@ Broken into reviewable, independently shippable chunks. Each phase ends in a wor
 - Update CHANGELOG.md, README.md, ARCHITECTURE.md, ROADMAP.md, CLAUDE.md.
 - Add `docs/SCHEDULED_WORKFLOWS.md` dedicated user guide.
 
-**Exit criteria:** v0.6.0 zip is built, tested on a fresh-site upgrade, ready to deploy to 725 production. Design doc is updated to reflect any divergences from this proposal that surfaced during implementation.
+**Exit criteria:** v0.6.0 zip is built, tested on a fresh-site upgrade, ready to deploy to the first production install. Design doc is updated to reflect any divergences from this proposal that surfaced during implementation.
 
 ---
 
@@ -555,7 +555,7 @@ Manual but scripted:
 8. Verify FRE entries table contains only entries < 5 minutes old.
 9. Verify Action Scheduler shows the recurring action still scheduled.
 
-### 8.4 Production verification on 725
+### 8.4 Production verification on the first client install
 
 After deploy:
 1. Run preflight, verify v0.6.0 active and credentials/workflows healthy.
@@ -572,13 +572,13 @@ After deploy:
 
 1. **Local dev site (Flywheel)** — full implementation + smoke tests pass.
 2. **Internal staging** — fresh test site, in-place upgrade from v0.5.0 zip, all existing workflows verified still running.
-3. **725 Print Lab production** — in-place upgrade once staging passes. Deploy alongside the new retention workflow JSON.
+3. **First client production install** — in-place upgrade once staging passes. Deploy alongside the new retention workflow JSON.
 4. **Monitor for 7 days** — daily verification that retention workflow runs and existing Bulk/Small/Contact workflows continue to run on form submissions.
 5. **Document lessons** — update this design doc with any divergences from the planned implementation.
 
 ### 9.2 Rollback plan
 
-If v0.6.0 causes issues on 725 production:
+If v0.6.0 causes issues on the production install:
 1. Disable the retention workflow via REST (`enabled: false`) — this is the new functionality; disabling it isolates the issue.
 2. If existing workflows are also broken: re-upload the v0.5.0 zip via WP Admin → Plugins → Upload Plugin → Replace Existing. The DDL changes (nullable form_id, new trigger_type column) do NOT need to be rolled back — they're additive and backwards-compatible.
 3. Existing form-triggered workflows resume working immediately.
@@ -615,7 +615,7 @@ The existing `on_failure_notify` setting works unchanged. A failed scheduled run
 
 Action Scheduler depends on WP-Cron firing. On sites with low organic traffic, WP-Cron may not fire for long stretches. A daily retention workflow could go a week between actual runs.
 
-**Mitigation:** Documented in `docs/SETUP_GOOGLE_DRIVE.md` (already) — production sites should configure a real OS-level cron via the host (GoDaddy cPanel, etc.). The same instruction applies for FMW scheduled workflows. For 725 specifically, this is one of the open items from the original migration (the v0.5 docs noted this).
+**Mitigation:** Documented in `docs/SETUP_GOOGLE_DRIVE.md` (already) — production sites should configure a real OS-level cron via the host (GoDaddy cPanel, etc.). The same instruction applies for FMW scheduled workflows. For the first client install specifically, this is one of the open items from the original migration (the v0.5 docs noted this).
 
 ### 11.2 Risk: Action Scheduler queue backlog
 
@@ -647,7 +647,7 @@ A workflow is created with `enabled: true`, schedules a cron event, then is late
 
 ### 12.1 Hardcode retention in the existing housekeeping job
 
-**Why not:** Solves 725's immediate problem but creates zero reusable capability. Every future use case requiring scheduling becomes another hardcoded job. Violates the "Steps-as-code" architecture pattern from ROADMAP.md.
+**Why not:** Solves the first client's immediate problem but creates zero reusable capability. Every future use case requiring scheduling becomes another hardcoded job. Violates the "Steps-as-code" architecture pattern from ROADMAP.md.
 
 ### 12.2 Use a separate "scheduled_workflows" table
 
@@ -691,7 +691,7 @@ A v0.6.0 release is shippable when ALL of the following are true:
 6. All existing unit and integration tests still pass (no regressions in form-triggered behavior).
 7. New unit tests added for: validator (trigger normalization, enum validation), schedule listener (next-tick computation), and both new step types. Test coverage for new code > 85%.
 8. CHANGELOG.md, README.md, ARCHITECTURE.md, ROADMAP.md, CLAUDE.md, and a new `docs/SCHEDULED_WORKFLOWS.md` are updated to reflect v0.6.0.
-9. The 725 production install is upgraded and runs the 30-day retention workflow daily for at least one full week with no errors.
+9. The first production install is upgraded and runs the 30-day retention workflow daily for at least one full week with no errors.
 
 ---
 

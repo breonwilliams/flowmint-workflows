@@ -56,7 +56,7 @@ For each Zap step, capture:
 
 This documentation goes into the workflow JSON. Without it, the migrated workflow has no chance of being equivalent.
 
-For 725 Print Lab specifically: this is captured in the `725 Print Lab/_Zapier-Resume-Context/` folder across multiple primer documents (v1-v12).
+For the first client deployment, this was captured in the client's own folder (kept outside the plugin repo) across a series of context documents.
 
 ### Step 2: Translate Zap config to workflow JSON
 
@@ -89,7 +89,7 @@ Specifically:
 
 Edit the workflow JSON's templates and config values to add these prefixes. After cutover (Step 6), revert.
 
-Example for 725 Bulk:
+Example for a shop's Bulk quote workflow:
 
 ```json
 {
@@ -250,11 +250,11 @@ For migration: existing Zap runs may have created Quote duplicates if they retri
 
 ### Gotcha #6: Email sender (the Gmail step)
 
-For 725 Print Lab specifically, the Gmail step in Zapier requires OAuth — Zapier connects to a Gmail account and sends as that account. The setup work was painful and is documented in the v1-v12 primers.
+For the first client deployment, the Gmail step in Zapier required OAuth — Zapier connects to a Gmail account and sends as that account. The setup work was painful and is documented in the client's own folder.
 
 FlowMint's `send_email` step uses `wp_mail()` by default — sends from the WordPress site's configured email. For deliverability, configure SMTP (Mailgun, SendGrid, Postmark, or even a simple app-password Gmail setup) at the WordPress level. The plugin doesn't do OAuth.
 
-If the client wants emails sent from a specific Gmail address (e.g., `orders@725printlab.com`), set up SMTP via a plugin like WP Mail SMTP and configure the From address. FlowMint's `send_email` step picks it up automatically.
+If the client wants emails sent from a specific Gmail address (e.g., `orders@example.com`), set up SMTP via a plugin like WP Mail SMTP and configure the From address. FlowMint's `send_email` step picks it up automatically.
 
 This is actually SIMPLER than the Zap setup — no OAuth flows, no per-account auth.
 
@@ -269,14 +269,14 @@ For a typical service-business workflow (one FE form → one Zap → 5-10 steps 
 
 Total: roughly **4-8 hours of active work** plus 1-2 weeks of calendar time for the parallel run + monitoring.
 
-For 725 Print Lab specifically (Bulk + Small workflows): roughly 6 hours of active work for both workflows in parallel, plus the parallel-run verification window.
+For the first client deployment (a print shop's Bulk + Small workflows): roughly 6 hours of active work for both workflows in parallel, plus the parallel-run verification window.
 
-## Worked example: 725 Print Lab
+## Worked example: a print shop's quote workflows
 
-The 725-specific migration is documented in the client folder at:
+The migration is documented in the client's own folder, kept outside the plugin repo:
 
 ```
-725 Print Lab/_FlowMint-Workflows-Migration/
+<client folder>/_FlowMint-Workflows-Migration/
 ├── README.md                           # Migration plan + status
 ├── workflow-bulk-order-quote.json      # The actual workflow definition for Bulk
 ├── workflow-small-order-request.json   # The actual workflow definition for Small
@@ -286,4 +286,4 @@ The 725-specific migration is documented in the client folder at:
 
 These files don't exist yet — they're created during Phase 4 of the build.
 
-The 725 migration leverages 24+ hours of accumulated Zap configuration knowledge (captured in the v1-v12 primers) — translating that into FlowMint Workflows JSON should take a few hours, not 24+, because the docs already describe everything.
+That migration leverages 24+ hours of accumulated Zap configuration knowledge (captured in the client's context documents) — translating that into FlowMint Workflows JSON should take a few hours, not 24+, because the docs already describe everything.

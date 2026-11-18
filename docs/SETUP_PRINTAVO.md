@@ -41,7 +41,7 @@ Workflow definitions reference Printavo internal IDs for users (sales reps), inv
 2. Find the user (e.g., the customer service rep handling inquiries)
 3. The user ID is in the URL when you click their profile
 
-For 725 Print Lab: User ID `60522` (Alexis Lilly).
+Example: User ID `123456` (the sales rep).
 
 ### Invoice Status ID
 
@@ -49,13 +49,13 @@ For 725 Print Lab: User ID `60522` (Alexis Lilly).
 2. Find the status that should be applied to website-submitted Quotes (typically named something like "Quote - Inquiry" or "New Lead")
 3. The status ID is in the URL when you click to edit it
 
-For 725 Print Lab: Invoice Status ID `416419` (named "Quote - JotForm Inquiry" — legacy name from before this plugin existed).
+Example: Invoice Status ID `654321` (a status such as "Quote - Inquiry").
 
 ### Customer ID for testing (optional)
 
 For workflow testing, it helps to have a known test customer. Either create one explicitly via the Printavo UI, or use an existing customer's ID.
 
-For 725 Print Lab: Test Customer ID `10706641` ("TEST — Acme Corp"). Created during the Zapier-era testing; not yet cleaned up.
+Example: Test Customer ID `1000001` ("TEST — Acme Corp"), created for testing.
 
 ## Step 3: Configure FlowMint Workflows with the credential
 

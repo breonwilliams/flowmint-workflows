@@ -139,8 +139,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [0.11.0] - 2026-09-21
 
-Found testing 725 Print Lab's two quote workflows end to end on a local
-mirror (Drive simulated through the new filter). PR #18.
+Found testing the first production install's two quote workflows end to end
+on a local mirror (Drive simulated through the new filter). PR #18.
 
 ### Added
 
@@ -160,10 +160,10 @@ mirror (Drive simulated through the new filter). PR #18.
 ### Fixed
 
 - **A run cut off by a PHP time limit, fatal error or memory limit stayed
-  "running" forever**: no retry, no alert, none of the later steps. For 725
-  that meant no quote email to the shop, and with Promptless Forms' own
-  notification off on their forms nobody would know. Reproduced with a 21 MB
-  upload and a 30-second limit. Action Scheduler's
+  "running" forever**: no retry, no alert, none of the later steps. For a
+  shop's quote workflow that meant no quote email to the shop, and with
+  Promptless Forms' own notification off on its forms nobody would know.
+  Reproduced with a 21 MB upload and a 30-second limit. Action Scheduler's
   `action_scheduler_unexpected_shutdown` / `action_scheduler_failed_execution`
   hand the run to `FMW_Workflow_Job::recover_interrupted()`, and the sweep
   catches one killed outright. The step that was running is read from the
@@ -595,9 +595,9 @@ Workflows can now be triggered on a recurring schedule (hourly / twice-daily / d
 99 of 99 smoke checks green across three layered test suites:
 - Phase 1 (32 checks) — schema migration, value-object accessors, validator normalization + trigger validation, repository scheduled + legacy create/retrieve, lifecycle hooks fire correctly, schedule listener stub is a no-op.
 - Phase 2 (32 checks) — listener wiring, AS event registration on save/update/disable/delete, end-to-end tick → run completes synchronously, reconciliation drift correction, form-triggered regression unaffected.
-- Phase 3 (35 checks) — both new step types registered with correct metadata, every documented filter combination on `fre_list_entries`, idempotency + mixed-input tolerance on `fre_delete_entries`, end-to-end retention workflow scenario with the actual 725 use case JSON.
+- Phase 3 (35 checks) — both new step types registered with correct metadata, every documented filter combination on `fre_list_entries`, idempotency + mixed-input tolerance on `fre_delete_entries`, end-to-end retention workflow scenario with the actual production use case JSON.
 
-**Plugin version stamp:** `0.6.0` — stable release following 725 Print Lab production verification.
+**Plugin version stamp:** `0.6.0` — stable release following production verification on the first client deployment.
 
 ## [0.5.0] — 2026-05-10
 
@@ -638,7 +638,7 @@ Closes the **Critical C2** finding in `FLOWMINT_AUDIT.md`: the WordPress-side RE
 Previously 25 (Phase 1–3 build). The new `drive_create_text_file` slots into the Google Drive category alongside the existing 5 Drive steps.
 
 ### Use case for the new step
-Fixes the architectural gap surfaced during 725 Print Lab production testing: Roderick browsing a Drive submission folder would only see the customer's design file (or an empty folder if no design was uploaded), with no record of the form data that triggered the workflow. With the new step, the workflow can drop a `submission.txt` file containing the same structured information that lands in the Printavo Quote `customerNote` — providing defense-in-depth so the data is recoverable from Drive even if Printavo is down or the Quote gets accidentally deleted.
+Fixes the architectural gap surfaced during production testing on the first client deployment: the shop owner browsing a Drive submission folder would only see the customer's design file (or an empty folder if no design was uploaded), with no record of the form data that triggered the workflow. With the new step, the workflow can drop a `submission.txt` file containing the same structured information that lands in the Printavo Quote `customerNote` — providing defense-in-depth so the data is recoverable from Drive even if Printavo is down or the Quote gets accidentally deleted.
 
 ## [0.4.0-rc6] — 2026-05-03
 
@@ -682,7 +682,7 @@ Output of `printavo_create_quote` adds: `description`, `public_url`, `customer_d
 ## [0.4.0-rc4] — 2026-05-03
 
 ### Fixed
-- **Printavo client `Accept: application/json` header.** Without an explicit Accept header, `wp_remote_request` sends nothing, and Printavo's web router falls back to the HTML-rendering Rails app for a request the API namespace was supposed to handle. The result is a 500 HTML page instead of a 200 JSON GraphQL error response. Browsers happen to send Accept by default, which is why the same call works in the browser DevTools but failed when invoked from a WordPress server. Fix verified empirically by capturing the contrast between the two contexts on 725printlab.com production.
+- **Printavo client `Accept: application/json` header.** Without an explicit Accept header, `wp_remote_request` sends nothing, and Printavo's web router falls back to the HTML-rendering Rails app for a request the API namespace was supposed to handle. The result is a 500 HTML page instead of a 200 JSON GraphQL error response. Browsers happen to send Accept by default, which is why the same call works in the browser DevTools but failed when invoked from a WordPress server. Fix verified empirically by capturing the contrast between the two contexts on the first production install.
 - **`FMW_Printavo_Client::test()` query updated for current Printavo schema.** Printavo's `Account` GraphQL type renamed `name` → `companyName` and `contactEmail` → `companyEmail` in a recent API revision. Test query now uses the current names; output keys (`account_name`, `contact_email`) preserved so downstream consumers don't see a behavioral change. Customer + Quote queries already used the post-rename names; only the test query was stale.
 
 ## [0.4.0-rc3] — 2026-05-03
@@ -695,16 +695,16 @@ Output of `printavo_create_quote` adds: `description`, `public_url`, `customer_d
 ## [0.4.0-rc2] — 2026-05-03
 
 ### Fixed
-- **Action Scheduler dependency restored.** The `woocommerce/action-scheduler` package was incorrectly removed from `composer.json` during the local Flywheel recovery on 2026-05-03. That removal worked locally because the local site has WooCommerce active (which bundles AS), but on hosts without WC — e.g. 725printlab.com — FMW would activate but show "Action Scheduler is not loaded" and the submission listener would never enqueue jobs. Re-added `woocommerce/action-scheduler ^3.7` to composer require, plus an explicit `require_once vendor/woocommerce/action-scheduler/action-scheduler.php` in the bootstrap (AS does not load via Composer's PSR-4 autoloader by design — it uses its own `ActionScheduler_Versions` loader so multiple plugins can co-exist with AS's "highest version wins" deduplication).
+- **Action Scheduler dependency restored.** The `woocommerce/action-scheduler` package was incorrectly removed from `composer.json` during the local Flywheel recovery on 2026-05-03. That removal worked locally because the local site has WooCommerce active (which bundles AS), but on hosts without WC — e.g. the first production install — FMW would activate but show "Action Scheduler is not loaded" and the submission listener would never enqueue jobs. Re-added `woocommerce/action-scheduler ^3.7` to composer require, plus an explicit `require_once vendor/woocommerce/action-scheduler/action-scheduler.php` in the bootstrap (AS does not load via Composer's PSR-4 autoloader by design — it uses its own `ActionScheduler_Versions` loader so multiple plugins can co-exist with AS's "highest version wins" deduplication).
 
 ## [0.4.0-rc1] — 2026-05-03
 
-### Phase 4 — 725 Print Lab production migration (release candidate)
+### Phase 4 — First production migration (release candidate)
 - Workflow JSONs validated against local REST API (`/workflows/{id}/test` endpoint, both pass with zero errors and zero warnings):
-  - `725-bulk-order-quote` — 10 steps (Bulk → Printavo + Drive)
-  - `725-small-order-request` — 10 steps (Small → Printavo + Drive)
+  - `bulk-order-quote` — 10 steps (Bulk → Printavo + Drive)
+  - `small-order-request` — 10 steps (Small → Printavo + Drive)
 - Migration runbook + parallel-run / cutover / rollback procedures documented in `_FlowMint-Workflows-Migration/README.md`
-- Quote description templates committed (`725-bulk-quote-description.txt`, `725-small-quote-description.txt`, `725-customer-ack.txt`)
+- Quote description templates committed (`bulk-quote-description.txt`, `small-quote-description.txt`, `customer-ack.txt`)
 
 ### Production build hardening
 - `composer.json`: added `extra.google/apiclient-services` whitelist for `Drive` only — production builds drop unused Google service stubs (~186MB → ~5MB for the google/ tree)
@@ -832,8 +832,8 @@ Output of `printavo_create_quote` adds: `description`, `public_url`, `customer_d
 - Verified end-to-end: `http_get` workflow against httpbin.org returned HTTP 200 with parsed JSON in 393ms; downstream step correctly interpolated `{{ steps.fetch_data.status }}`
 - Printavo client unverifiable without real API credentials — same as Drive, will be tested during Phase 4 migration
 
-### Phase 4 — 725 Print Lab migration (not started)
-- 725 workflow definitions (JSON)
+### Phase 4 — First client migration (not started)
+- Client workflow definitions (JSON)
 - Parallel-run verification with Zapier
 - Cutover from Zapier to FlowMint Workflows
 

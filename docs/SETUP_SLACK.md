@@ -6,7 +6,7 @@ How to wire FlowMint Workflows to send failure notifications to a Slack channel.
 
 Workflows run async. If one fails permanently, nobody notices unless something tells them. Without notifications:
 - A customer's quote request silently disappears (no email, no Drive folder, no Printavo Quote)
-- Roderick wonders why his lead pipeline is dry
+- The client wonders why their lead pipeline is dry
 - FlowMint reputation suffers
 
 With notifications:
@@ -68,10 +68,10 @@ One alert per run that fails **for good** (`fmw_workflow_run_failed`, fired by `
 Plain text, four lines:
 
 ```
-FlowMint workflow FAILED after all retries: "725 Bulk Order → Printavo + Drive" on 725 Print Lab
+FlowMint workflow FAILED after all retries: "Bulk Order → Printavo + Drive" on Example Shop
 Error: [external_5xx] Drive API timeout after 30s
 Form entry: #5
-Inspect + replay: https://725printlab.com/wp-admin/admin.php?page=fmw-runs&run_id=42
+Inspect + replay: https://example.com/wp-admin/admin.php?page=fmw-runs&run_id=42
 ```
 
 A scheduled run shows `Trigger: scheduled run (no form entry)` in place of the entry line. The link goes to the run detail page in the client's WordPress admin, where you can:
